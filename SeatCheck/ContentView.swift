@@ -17,7 +17,7 @@ struct ContentView: View {
     @State private var selectedPreset: SessionPreset = .ride
     @State private var selectedDuration: TimeInterval = 1800 // 30 minutes
     @StateObject private var liveActivityManager = LiveActivityManager.shared
-    @State private var updateTimer: Timer?
+    @StateObject private var timerManager = TimerManager.shared
 
     var body: some View {
         NavigationStack {
@@ -42,7 +42,10 @@ struct ContentView: View {
                 
                 // Active Session Display
                 if let activeSession = sessions.first(where: { $0.isActive }) {
-                    ActiveSessionView(session: activeSession)
+                    NavigationLink(destination: SessionDetailView(session: activeSession)) {
+                        ActiveSessionView(session: activeSession)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 } else {
                     // Quick Start Button
                     VStack(spacing: 16) {
@@ -114,10 +117,8 @@ struct ContentView: View {
                 )
             }
             .onAppear {
-                startUpdateTimer()
-            }
-            .onDisappear {
-                stopUpdateTimer()
+                // Check for active sessions and recover timer state
+                recoverActiveSession()
             }
         }
     }
@@ -147,24 +148,32 @@ struct ContentView: View {
             Task {
                 await liveActivityManager.startLiveActivity(for: newSession)
             }
+            
+            // Start Timer
+            timerManager.startTimer(for: newSession)
         }
     }
     
-    private func startUpdateTimer() {
-        updateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            updateLiveActivity()
-        }
-    }
-    
-    private func stopUpdateTimer() {
-        updateTimer?.invalidate()
-        updateTimer = nil
-    }
-    
-    private func updateLiveActivity() {
+    private func recoverActiveSession() {
+        // Check if there's an active session that needs timer recovery
         if let activeSession = sessions.first(where: { $0.isActive }) {
-            Task {
-                await liveActivityManager.updateLiveActivity(for: activeSession)
+            // Check if session is still valid
+            if timerManager.validateSession(activeSession) {
+                // Start timer for the active session
+                timerManager.startTimer(for: activeSession)
+                
+                // Start Live Activity if not already active
+                if !liveActivityManager.isLiveActivityActive() {
+                    Task {
+                        await liveActivityManager.startLiveActivity(for: activeSession)
+                    }
+                }
+                
+                print("Recovered active session: \(activeSession.id)")
+            } else {
+                // Session is no longer valid, mark as completed
+                timerManager.completeSession(activeSession, endSignal: .timer)
+                print("Session expired during app restart: \(activeSession.id)")
             }
         }
     }
@@ -175,6 +184,7 @@ struct ActiveSessionView: View {
     let session: Session
     @Environment(\.modelContext) private var modelContext
     @StateObject private var liveActivityManager = LiveActivityManager.shared
+    @StateObject private var timerManager = TimerManager.shared
     
     var body: some View {
         VStack(spacing: 12) {
@@ -189,22 +199,38 @@ struct ActiveSessionView: View {
                     .foregroundColor(.secondary)
             }
             
-            ProgressView(value: session.progress)
+            ProgressView(value: timerManager.progress(for: session))
                 .progressViewStyle(LinearProgressViewStyle())
             
-            Text(timeString(from: session.remainingTime))
+            Text(timerManager.formattedTimeRemaining())
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(session.isExpired ? .red : .primary)
+                .foregroundColor(timerManager.isSessionExpired ? .red : .primary)
             
-            Button(action: endSession) {
-                Text("End Session")
+            // Timer Controls
+            HStack(spacing: 12) {
+                Button(action: toggleTimer) {
+                    HStack {
+                        Image(systemName: timerManager.isTimerRunning ? "pause.fill" : "play.fill")
+                        Text(timerManager.isTimerRunning ? "Pause" : "Resume")
+                    }
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(Color.red)
+                    .background(Color.blue)
                     .cornerRadius(8)
+                }
+                
+                Button(action: endSession) {
+                    Text("End Session")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.red)
+                        .cornerRadius(8)
+                }
             }
         }
         .padding()
@@ -219,16 +245,17 @@ struct ActiveSessionView: View {
         return String(format: "%02d:%02d", minutes, seconds)
     }
     
+    private func toggleTimer() {
+        if timerManager.isTimerRunning {
+            timerManager.pauseTimer()
+        } else {
+            timerManager.resumeTimer()
+        }
+    }
+    
     private func endSession() {
         withAnimation {
-            session.isActive = false
-            session.completedAt = Date()
-            session.endSignal = .manual
-            
-            // End Live Activity
-            Task {
-                await liveActivityManager.endLiveActivity()
-            }
+            timerManager.completeSession(session, endSignal: .manual)
         }
     }
 }
