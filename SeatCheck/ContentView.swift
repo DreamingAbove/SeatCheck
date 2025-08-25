@@ -16,6 +16,8 @@ struct ContentView: View {
     @State private var showingNewSession = false
     @State private var selectedPreset: SessionPreset = .ride
     @State private var selectedDuration: TimeInterval = 1800 // 30 minutes
+    @StateObject private var liveActivityManager = LiveActivityManager.shared
+    @State private var updateTimer: Timer?
 
     var body: some View {
         NavigationStack {
@@ -111,6 +113,12 @@ struct ContentView: View {
                     onStart: startNewSession
                 )
             }
+            .onAppear {
+                startUpdateTimer()
+            }
+            .onDisappear {
+                stopUpdateTimer()
+            }
         }
     }
     
@@ -134,6 +142,30 @@ struct ContentView: View {
                 let newSettings = Settings()
                 modelContext.insert(newSettings)
             }
+            
+            // Start Live Activity
+            Task {
+                await liveActivityManager.startLiveActivity(for: newSession)
+            }
+        }
+    }
+    
+    private func startUpdateTimer() {
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            updateLiveActivity()
+        }
+    }
+    
+    private func stopUpdateTimer() {
+        updateTimer?.invalidate()
+        updateTimer = nil
+    }
+    
+    private func updateLiveActivity() {
+        if let activeSession = sessions.first(where: { $0.isActive }) {
+            Task {
+                await liveActivityManager.updateLiveActivity(for: activeSession)
+            }
         }
     }
 }
@@ -141,6 +173,8 @@ struct ContentView: View {
 // MARK: - Supporting Views
 struct ActiveSessionView: View {
     let session: Session
+    @Environment(\.modelContext) private var modelContext
+    @StateObject private var liveActivityManager = LiveActivityManager.shared
     
     var body: some View {
         VStack(spacing: 12) {
@@ -162,6 +196,16 @@ struct ActiveSessionView: View {
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(session.isExpired ? .red : .primary)
+            
+            Button(action: endSession) {
+                Text("End Session")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.red)
+                    .cornerRadius(8)
+            }
         }
         .padding()
         .background(Color.gray.opacity(0.1))
@@ -173,6 +217,19 @@ struct ActiveSessionView: View {
         let minutes = Int(timeInterval) / 60
         let seconds = Int(timeInterval) % 60
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+    
+    private func endSession() {
+        withAnimation {
+            session.isActive = false
+            session.completedAt = Date()
+            session.endSignal = .manual
+            
+            // End Live Activity
+            Task {
+                await liveActivityManager.endLiveActivity()
+            }
+        }
     }
 }
 
