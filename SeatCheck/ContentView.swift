@@ -14,10 +14,12 @@ struct ContentView: View {
     @Query private var settings: [Settings]
     
     @State private var showingNewSession = false
+    @State private var showingCameraScan = false
     @State private var selectedPreset: SessionPreset = .ride
     @State private var selectedDuration: TimeInterval = 1800 // 30 minutes
     @StateObject private var liveActivityManager = LiveActivityManager.shared
     @StateObject private var timerManager = TimerManager.shared
+    @StateObject private var sensorManager = SensorManager.shared
     @EnvironmentObject private var notificationManager: NotificationManager
 
     var body: some View {
@@ -48,7 +50,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                 } else {
-                    // Quick Start Button
+                    // Quick Start Buttons
                     VStack(spacing: 16) {
                         Button(action: {
                             selectedPreset = .ride
@@ -81,6 +83,22 @@ struct ContentView: View {
                             .padding()
                             .background(Color.gray.opacity(0.2))
                             .foregroundColor(.primary)
+                            .cornerRadius(12)
+                        }
+                        
+                        Button(action: {
+                            showingCameraScan = true
+                        }) {
+                            HStack {
+                                Image(systemName: "camera.fill")
+                                    .font(.title2)
+                                Text("Scan Seat")
+                                    .font(.headline)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.green)
+                            .foregroundColor(.white)
                             .cornerRadius(12)
                         }
                     }
@@ -116,6 +134,9 @@ struct ContentView: View {
                     selectedDuration: $selectedDuration,
                     onStart: startNewSession
                 )
+            }
+            .sheet(isPresented: $showingCameraScan) {
+                CameraScanView()
             }
             .onAppear {
                 // Check for active sessions and recover timer state
@@ -205,6 +226,17 @@ struct ContentView: View {
             }
         }
         
+        // Handle open scan action
+        NotificationCenter.default.addObserver(
+            forName: .openScanView,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let sessionId = notification.userInfo?["sessionId"] as? UUID {
+                self.handleOpenScan(sessionId: sessionId)
+            }
+        }
+        
         // Handle end session now action
         NotificationCenter.default.addObserver(
             forName: .endSessionNow,
@@ -241,6 +273,12 @@ struct ContentView: View {
             print("Session ended immediately: \(sessionId)")
         }
     }
+    
+    private func handleOpenScan(sessionId: UUID) {
+        // Show camera scan view
+        showingCameraScan = true
+        print("Opening camera scan for session: \(sessionId)")
+    }
 }
 
 // MARK: - Supporting Views
@@ -249,6 +287,7 @@ struct ActiveSessionView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var liveActivityManager = LiveActivityManager.shared
     @StateObject private var timerManager = TimerManager.shared
+    @StateObject private var sensorManager = SensorManager.shared
     
     var body: some View {
         VStack(spacing: 12) {
@@ -270,6 +309,21 @@ struct ActiveSessionView: View {
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(timerManager.isSessionExpired ? .red : .primary)
+            
+            // Sensor Status Indicator
+            HStack(spacing: 8) {
+                Image(systemName: sensorManager.isLocationAuthorized ? "location.fill" : "location.slash")
+                    .foregroundColor(sensorManager.isLocationAuthorized ? .green : .red)
+                    .font(.caption)
+                
+                Image(systemName: sensorManager.isMotionAuthorized ? "figure.walk" : "figure.walk.slash")
+                    .foregroundColor(sensorManager.isMotionAuthorized ? .green : .red)
+                    .font(.caption)
+                
+                Text(sensorManager.lastActivity)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
             
             // Timer Controls
             HStack(spacing: 12) {

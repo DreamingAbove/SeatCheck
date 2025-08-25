@@ -13,6 +13,7 @@ struct SessionDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var timerManager = TimerManager.shared
     @StateObject private var liveActivityManager = LiveActivityManager.shared
+    @StateObject private var sensorManager = SensorManager.shared
     @EnvironmentObject private var notificationManager: NotificationManager
     @Environment(\.dismiss) private var dismiss
     
@@ -31,6 +32,9 @@ struct SessionDetailView: View {
                     
                     // Session Statistics
                     statisticsSection
+                    
+                    // Sensor Status
+                    sensorStatusSection
                     
                     // Notification Status
                     notificationStatusSection
@@ -233,6 +237,104 @@ struct SessionDetailView: View {
         .cornerRadius(16)
     }
     
+    // MARK: - Sensor Status Section
+    private var sensorStatusSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Smart Detection")
+                .font(.headline)
+                .fontWeight(.semibold)
+            
+            VStack(spacing: 8) {
+                // Location Status
+                HStack {
+                    Image(systemName: sensorManager.isLocationAuthorized ? "location.fill" : "location.slash")
+                        .foregroundColor(sensorManager.isLocationAuthorized ? .green : .red)
+                    
+                    Text("Location")
+                        .font(.subheadline)
+                    
+                    Spacer()
+                    
+                    Text(sensorManager.isLocationAuthorized ? "Enabled" : "Disabled")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                // Motion Status
+                HStack {
+                    Image(systemName: sensorManager.isMotionAuthorized ? "figure.walk" : "figure.walk.slash")
+                        .foregroundColor(sensorManager.isMotionAuthorized ? .green : .red)
+                    
+                    Text("Motion")
+                        .font(.subheadline)
+                    
+                    Spacer()
+                    
+                    Text(sensorManager.isMotionAuthorized ? "Enabled" : "Disabled")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                // Current Activity
+                HStack {
+                    Image(systemName: activityIcon)
+                        .foregroundColor(activityColor)
+                    
+                    Text("Activity")
+                        .font(.subheadline)
+                    
+                    Spacer()
+                    
+                    Text(sensorManager.lastActivity)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                // Location Info
+                if let location = sensorManager.currentLocation {
+                    HStack {
+                        Image(systemName: "mappin.circle")
+                            .foregroundColor(.blue)
+                        
+                        Text("Location")
+                            .font(.subheadline)
+                        
+                        Spacer()
+                        
+                        Text("\(location.coordinate.latitude, specifier: "%.4f"), \(location.coordinate.longitude, specifier: "%.4f")")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                // Enable Sensors Button
+                if !sensorManager.isLocationAuthorized || !sensorManager.isMotionAuthorized {
+                    Button("Enable Sensors") {
+                        Task {
+                            let locationGranted = await sensorManager.requestLocationAuthorization()
+                            let motionGranted = await sensorManager.requestMotionAuthorization()
+                            
+                            if locationGranted || motionGranted {
+                                print("Sensor permissions granted")
+                            } else {
+                                print("Some sensor permissions were denied")
+                            }
+                        }
+                    }
+                    .font(.caption)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                }
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(16)
+    }
+    
     // MARK: - Helper Functions
     private func toggleTimer() {
         if timerManager.isTimerRunning {
@@ -255,6 +357,28 @@ struct SessionDetailView: View {
             return "\(hours)h \(minutes)m"
         } else {
             return "\(minutes)m"
+        }
+    }
+    
+    private var activityIcon: String {
+        switch sensorManager.lastActivity {
+        case "In Vehicle": return "car.fill"
+        case "Walking": return "figure.walk"
+        case "Running": return "figure.run"
+        case "Cycling": return "bicycle"
+        case "Stationary": return "figure.stand"
+        default: return "questionmark.circle"
+        }
+    }
+    
+    private var activityColor: Color {
+        switch sensorManager.lastActivity {
+        case "In Vehicle": return .blue
+        case "Walking": return .green
+        case "Running": return .orange
+        case "Cycling": return .purple
+        case "Stationary": return .gray
+        default: return .secondary
         }
     }
 }

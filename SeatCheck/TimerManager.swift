@@ -46,6 +46,9 @@ class TimerManager: ObservableObject {
             }
         }
         
+        // Start sensor monitoring
+        SensorManager.shared.startMonitoringSession(session)
+        
         print("Timer started for session: \(session.id)")
     }
     
@@ -82,6 +85,10 @@ class TimerManager: ObservableObject {
         timeRemaining = 0
         
         endBackgroundTask()
+        
+        // Stop sensor monitoring
+        SensorManager.shared.stopMonitoringSession()
+        
         currentSession = nil
         
         print("Timer stopped")
@@ -143,6 +150,9 @@ class TimerManager: ObservableObject {
         // Stop timer if this was the current session
         if currentSession?.id == session.id {
             stopTimer()
+        } else {
+            // Stop sensor monitoring for this session
+            SensorManager.shared.stopMonitoringSession()
         }
         
         print("Session completed: \(session.id) with signal: \(endSignal)")
