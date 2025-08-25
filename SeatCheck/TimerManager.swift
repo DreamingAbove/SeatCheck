@@ -214,10 +214,10 @@ class TimerManager: ObservableObject {
         print("App will terminate - timer stopped")
     }
     
-    // MARK: - Notification (Placeholder for Step 2.1)
+    // MARK: - Notification Integration
     private func sendSessionExpiredNotification(for session: Session) {
-        // This will be implemented in Step 2.1
-        print("Session expired notification would be sent for: \(session.id)")
+        // Send session expired notification
+        NotificationManager.shared.sendSessionExpiredNotification(for: session)
     }
     
     // MARK: - Utility Methods

@@ -13,6 +13,7 @@ struct SessionDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var timerManager = TimerManager.shared
     @StateObject private var liveActivityManager = LiveActivityManager.shared
+    @EnvironmentObject private var notificationManager: NotificationManager
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -30,6 +31,9 @@ struct SessionDetailView: View {
                     
                     // Session Statistics
                     statisticsSection
+                    
+                    // Notification Status
+                    notificationStatusSection
                     
                     Spacer()
                 }
@@ -164,6 +168,64 @@ struct SessionDetailView: View {
                 StatRow(title: "Progress", value: "\(Int(timerManager.progress(for: session) * 100))%")
                 StatRow(title: "Items Collected", value: "\(session.checklistItems.filter { $0.isCollected }.count)/\(session.checklistItems.count)")
                 StatRow(title: "Status", value: session.isActive ? "Active" : "Completed")
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(16)
+    }
+    
+    // MARK: - Notification Status Section
+    private var notificationStatusSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Notifications")
+                .font(.headline)
+                .fontWeight(.semibold)
+            
+            VStack(spacing: 8) {
+                HStack {
+                    Image(systemName: notificationManager.isAuthorized ? "bell.fill" : "bell.slash")
+                        .foregroundColor(notificationManager.isAuthorized ? .green : .red)
+                    
+                    Text(notificationManager.isAuthorized ? "Notifications Enabled" : "Notifications Disabled")
+                        .font(.subheadline)
+                    
+                    Spacer()
+                    
+                    if !notificationManager.isAuthorized {
+                        Button("Enable") {
+                            Task {
+                                await notificationManager.requestAuthorization()
+                            }
+                        }
+                        .font(.caption)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                    }
+                }
+                
+                if notificationManager.isAuthorized {
+                    Text("You'll receive alerts when your session expires")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Button("Test Notification") {
+                        notificationManager.sendSessionExpiredNotification(for: session)
+                    }
+                    .font(.caption)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.orange)
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+                } else {
+                    Text("Enable notifications to get session reminders")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
         }
         .padding()

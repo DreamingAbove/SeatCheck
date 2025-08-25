@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var selectedDuration: TimeInterval = 1800 // 30 minutes
     @StateObject private var liveActivityManager = LiveActivityManager.shared
     @StateObject private var timerManager = TimerManager.shared
+    @EnvironmentObject private var notificationManager: NotificationManager
 
     var body: some View {
         NavigationStack {
@@ -119,6 +120,9 @@ struct ContentView: View {
             .onAppear {
                 // Check for active sessions and recover timer state
                 recoverActiveSession()
+                
+                // Set up notification action handlers
+                setupNotificationHandlers()
             }
         }
     }
@@ -175,6 +179,66 @@ struct ContentView: View {
                 timerManager.completeSession(activeSession, endSignal: .timer)
                 print("Session expired during app restart: \(activeSession.id)")
             }
+        }
+    }
+    
+    private func setupNotificationHandlers() {
+        // Handle mark all collected action
+        NotificationCenter.default.addObserver(
+            forName: .markAllItemsCollected,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let sessionId = notification.userInfo?["sessionId"] as? UUID {
+                self.handleMarkAllCollected(sessionId: sessionId)
+            }
+        }
+        
+        // Handle snooze action
+        NotificationCenter.default.addObserver(
+            forName: .snoozeSession,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let sessionId = notification.userInfo?["sessionId"] as? UUID {
+                self.handleSnoozeSession(sessionId: sessionId)
+            }
+        }
+        
+        // Handle end session now action
+        NotificationCenter.default.addObserver(
+            forName: .endSessionNow,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let sessionId = notification.userInfo?["sessionId"] as? UUID {
+                self.handleEndSessionNow(sessionId: sessionId)
+            }
+        }
+    }
+    
+    private func handleMarkAllCollected(sessionId: UUID) {
+        if let session = sessions.first(where: { $0.id == sessionId }) {
+            withAnimation {
+                for item in session.checklistItems {
+                    item.isCollected = true
+                }
+            }
+            print("All items marked as collected for session: \(sessionId)")
+        }
+    }
+    
+    private func handleSnoozeSession(sessionId: UUID) {
+        if let session = sessions.first(where: { $0.id == sessionId }) {
+            notificationManager.sendSnoozeNotification(for: session)
+            print("Snooze notification sent for session: \(sessionId)")
+        }
+    }
+    
+    private func handleEndSessionNow(sessionId: UUID) {
+        if let session = sessions.first(where: { $0.id == sessionId }) {
+            timerManager.completeSession(session, endSignal: .manual)
+            print("Session ended immediately: \(sessionId)")
         }
     }
 }
