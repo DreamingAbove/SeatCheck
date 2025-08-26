@@ -220,16 +220,19 @@ class CameraManager: NSObject, ObservableObject {
     }
     
     func startSession() {
-        Task {
-            captureSession?.startRunning()
+        Task.detached {
+            await self.captureSession?.startRunning()
         }
     }
     
     func stopSession() {
-        captureSession?.stopRunning()
+        Task.detached {
+            await self.captureSession?.stopRunning()
+        }
     }
     
     func switchCamera() {
+        // Simple camera switching - the heavy work is already done in setupCamera()
         setupCamera()
     }
     
@@ -270,6 +273,7 @@ class CameraManager: NSObject, ObservableObject {
     
     deinit {
         // Direct cleanup to avoid main actor isolation issues
+        // Note: This is safe in deinit as we're not calling any main actor methods
         captureSession?.stopRunning()
     }
 }
