@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var showingCameraScan = false
     @State private var showingChecklistSettings = false
     @State private var showingSessionHistory = false
+    @State private var showingNotificationSettings = false
     @State private var selectedPreset: SessionPreset = .ride
     @State private var selectedDuration: TimeInterval = 1800 // 30 minutes
     @StateObject private var liveActivityManager = LiveActivityManager.shared
@@ -146,6 +147,13 @@ struct ContentView: View {
                             Image(systemName: "checklist")
                                 .font(.title2)
                         }
+                        
+                        Button(action: {
+                            showingNotificationSettings = true
+                        }) {
+                            Image(systemName: "bell")
+                                .font(.title2)
+                        }
                     }
                 }
             }
@@ -164,6 +172,9 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingSessionHistory) {
                 SessionHistoryView()
+            }
+            .sheet(isPresented: $showingNotificationSettings) {
+                NotificationSettingsView()
             }
             .onAppear {
                 // Check for active sessions and recover timer state
@@ -279,6 +290,48 @@ struct ContentView: View {
                 self.handleEndSessionNow(sessionId: sessionId)
             }
         }
+        
+        // Handle extend session action
+        NotificationCenter.default.addObserver(
+            forName: .extendSession,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let sessionId = notification.userInfo?["sessionId"] as? UUID {
+                self.handleExtendSession(sessionId: sessionId)
+            }
+        }
+        
+        // Handle check seat action
+        NotificationCenter.default.addObserver(
+            forName: .checkSeatNow,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let sessionId = notification.userInfo?["sessionId"] as? UUID {
+                self.handleCheckSeat(sessionId: sessionId)
+            }
+        }
+        
+        // Handle view stats action
+        NotificationCenter.default.addObserver(
+            forName: .viewStats,
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.handleViewStats()
+        }
+        
+        // Handle share achievement action
+        NotificationCenter.default.addObserver(
+            forName: .shareAchievement,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let streakCount = notification.userInfo?["streakCount"] as? Int {
+                self.handleShareAchievement(streakCount: streakCount)
+            }
+        }
     }
     
     private func handleMarkAllCollected(sessionId: UUID) {
@@ -310,6 +363,34 @@ struct ContentView: View {
         // Show camera scan view
         showingCameraScan = true
         print("Opening camera scan for session: \(sessionId)")
+    }
+    
+    private func handleExtendSession(sessionId: UUID) {
+        if let session = sessions.first(where: { $0.id == sessionId }) {
+            // Extend session by 15 minutes
+            session.plannedDuration += 900 // 15 minutes
+            print("Session extended by 15 minutes: \(sessionId)")
+        }
+    }
+    
+    private func handleCheckSeat(sessionId: UUID) {
+        // Show camera scan view for seat checking
+        showingCameraScan = true
+        print("Opening camera scan for seat check: \(sessionId)")
+    }
+    
+    private func handleViewStats() {
+        // Show session history view
+        showingSessionHistory = true
+        print("Opening session history view")
+    }
+    
+    private func handleShareAchievement(streakCount: Int) {
+        // Create shareable content for achievement
+        let shareText = "🔥 I just achieved a \(streakCount)-day streak of checking my belongings with SeatCheck! Never leave anything behind again! 📱"
+        
+        // In a real app, you would use UIActivityViewController here
+        print("Sharing achievement: \(shareText)")
     }
 }
 

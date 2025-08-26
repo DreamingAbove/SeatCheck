@@ -49,6 +49,9 @@ class TimerManager: ObservableObject {
         // Start sensor monitoring
         SensorManager.shared.startMonitoringSession(session)
         
+        // Start Bluetooth monitoring
+        BluetoothManager.shared.startMonitoringSession(session)
+        
         print("Timer started for session: \(session.id)")
     }
     
@@ -88,6 +91,9 @@ class TimerManager: ObservableObject {
         
         // Stop sensor monitoring
         SensorManager.shared.stopMonitoringSession()
+        
+        // Stop Bluetooth monitoring
+        BluetoothManager.shared.stopMonitoringSession()
         
         currentSession = nil
         

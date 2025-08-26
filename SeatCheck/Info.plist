@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Information -->
+	<key>CFBundleDisplayName</key>
+	<string>SeatCheck</string>
+	
+	<key>CFBundleIdentifier</key>
+	<string>com.seatcheck.app</string>
+	
+	<key>CFBundleVersion</key>
+	<string>1.0</string>
+	
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	
+	<key>CFBundleGetInfoString</key>
+	<string></string>
+	
+	<!-- Required Device Capabilities -->
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>armv7</string>
+		<string>location-services</string>
+	</array>
+	
+	<!-- Supported Interface Orientations -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	
+	<!-- Background Modes -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>background-processing</string>
+	</array>
+	
+	<!-- Permission Descriptions -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SeatCheck uses your location to detect when you leave a location and remind you to check your belongings.</string>
+	
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>SeatCheck uses your location in the background to detect when you leave a location and remind you to check your belongings.</string>
+	
+	<key>NSMotionUsageDescription</key>
+	<string>SeatCheck uses motion data to detect when you're moving and help determine if you've left your seat.</string>
+	
+	<key>NSCameraUsageDescription</key>
+	<string>SeatCheck needs camera access to help you scan your seat area for forgotten items.</string>
+	
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>SeatCheck uses Bluetooth to detect when your connected devices disconnect, helping to remind you to check your belongings.</string>
+	
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>SeatCheck monitors Bluetooth device connections to help detect when you're leaving a location.</string>
+	
+	<!-- Application Support Directory -->
+	<key>NSApplicationSupportDirectoryUsageDescription</key>
+	<string>SeatCheck needs to create a directory to store your session data and settings.</string>
+	
+	<!-- Privacy Settings -->
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

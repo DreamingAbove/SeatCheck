@@ -12,6 +12,7 @@ import UserNotifications
 @main
 struct SeatCheckApp: App {
     @StateObject private var notificationManager = NotificationManager.shared
+    @StateObject private var errorHandler = ErrorHandler.shared
     
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -19,12 +20,31 @@ struct SeatCheckApp: App {
             ChecklistItem.self,
             Settings.self
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        
+        // Create a more robust configuration that handles directory creation
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false,
+            allowsSave: true
+        )
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // Fallback to in-memory storage if persistent storage fails
+            print("⚠️ Failed to create persistent ModelContainer: \(error)")
+            print("🔄 Falling back to in-memory storage")
+            
+            let fallbackConfiguration = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: true
+            )
+            
+            do {
+                return try ModelContainer(for: schema, configurations: [fallbackConfiguration])
+            } catch {
+                fatalError("Could not create ModelContainer: \(error)")
+            }
         }
     }()
 
@@ -32,9 +52,11 @@ struct SeatCheckApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(notificationManager)
+                .environmentObject(errorHandler)
                 .onAppear {
                     setupNotifications()
                 }
+                .errorAlert()
         }
         .modelContainer(sharedModelContainer)
     }

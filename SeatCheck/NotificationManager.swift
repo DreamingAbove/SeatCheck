@@ -52,77 +52,14 @@ class NotificationManager: ObservableObject {
     
     // MARK: - Session Expired Notification
     func sendSessionExpiredNotification(for session: Session) {
-        guard isAuthorized else {
-            print("Notifications not authorized")
-            return
-        }
-        
-        let content = UNMutableNotificationContent()
-        content.title = "Session Expired - Check Your Belongings!"
-        content.body = "Your \(session.preset.rawValue) session has ended. Don't forget to check your seat and surroundings."
-        content.sound = .default
-        content.categoryIdentifier = "SESSION_EXPIRED"
-        
-        // Add session data for action handling
-        content.userInfo = [
-            "sessionId": session.id.uuidString,
-            "preset": session.preset.rawValue,
-            "type": "session_expired"
-        ]
-        
-        let request = UNNotificationRequest(
-            identifier: "session_expired_\(session.id.uuidString)",
-            content: content,
-            trigger: nil // Immediate notification
-        )
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("Failed to schedule session expired notification: \(error)")
-            } else {
-                print("Session expired notification scheduled for session: \(session.id)")
-            }
-        }
+        // Use enhanced notification manager for better UX
+        EnhancedNotificationManager.shared.sendEnhancedSessionExpiredNotification(for: session)
     }
     
     // MARK: - Snooze Notification
     func sendSnoozeNotification(for session: Session, snoozeDuration: TimeInterval = 300) { // 5 minutes default
-        guard isAuthorized else {
-            print("Notifications not authorized")
-            return
-        }
-        
-        let content = UNMutableNotificationContent()
-        content.title = "Reminder - Check Your Belongings"
-        content.body = "Your \(session.preset.rawValue) session ended. Please check your seat and surroundings."
-        content.sound = .default
-        content.categoryIdentifier = "SESSION_EXPIRED"
-        
-        // Add session data for action handling
-        content.userInfo = [
-            "sessionId": session.id.uuidString,
-            "preset": session.preset.rawValue,
-            "type": "session_snooze"
-        ]
-        
-        let trigger = UNTimeIntervalNotificationTrigger(
-            timeInterval: snoozeDuration,
-            repeats: false
-        )
-        
-        let request = UNNotificationRequest(
-            identifier: "session_snooze_\(session.id.uuidString)_\(Date().timeIntervalSince1970)",
-            content: content,
-            trigger: trigger
-        )
-        
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("Failed to schedule snooze notification: \(error)")
-            } else {
-                print("Snooze notification scheduled for session: \(session.id)")
-            }
-        }
+        // Use enhanced notification manager for better UX
+        EnhancedNotificationManager.shared.sendEnhancedSnoozeNotification(for: session, snoozeDuration: snoozeDuration)
     }
     
     // MARK: - Reminder Notification

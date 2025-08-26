@@ -14,6 +14,7 @@ struct SessionDetailView: View {
     @StateObject private var timerManager = TimerManager.shared
     @StateObject private var liveActivityManager = LiveActivityManager.shared
     @StateObject private var sensorManager = SensorManager.shared
+    @StateObject private var bluetoothManager = BluetoothManager.shared
     @EnvironmentObject private var notificationManager: NotificationManager
     @Environment(\.dismiss) private var dismiss
     
@@ -38,6 +39,9 @@ struct SessionDetailView: View {
                     
                     // Notification Status
                     notificationStatusSection
+                    
+                    // Bluetooth Status
+                    bluetoothStatusSection
                     
                     Spacer()
                 }
@@ -380,6 +384,51 @@ struct SessionDetailView: View {
         case "Stationary": return .gray
         default: return .secondary
         }
+    }
+    
+    // MARK: - Bluetooth Status Section
+    private var bluetoothStatusSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Bluetooth Status")
+                .font(.headline)
+            
+            HStack(spacing: 16) {
+                BluetoothStatusView()
+                
+                if bluetoothManager.isBluetoothEnabled {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Connected Devices")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("\(bluetoothManager.connectedDevices.count)")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                    }
+                }
+                
+                Spacer()
+            }
+            
+            if let lastDisconnected = bluetoothManager.lastDisconnectedDevice {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle")
+                        .foregroundColor(.orange)
+                    
+                    Text("Recently disconnected: \(lastDisconnected.name ?? "Unknown Device")")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(8)
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(16)
     }
 }
 

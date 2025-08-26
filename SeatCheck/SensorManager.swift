@@ -53,7 +53,8 @@ class SensorManager: NSObject, ObservableObject {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 5 // Update every 5 meters
-        locationManager.allowsBackgroundLocationUpdates = true
+        // Note: allowsBackgroundLocationUpdates should only be set after proper authorization
+        // and when the app has background location capability
         locationManager.pausesLocationUpdatesAutomatically = false
     }
     
@@ -72,7 +73,9 @@ class SensorManager: NSObject, ObservableObject {
             return await withCheckedContinuation { continuation in
                 // We'll handle the result in the delegate
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                    continuation.resume(returning: self.locationManager.authorizationStatus == .authorizedWhenInUse)
+                    let newStatus = self.locationManager.authorizationStatus
+                    self.isLocationAuthorized = (newStatus == .authorizedWhenInUse || newStatus == .authorizedAlways)
+                    continuation.resume(returning: self.isLocationAuthorized)
                 }
             }
         case .authorizedWhenInUse, .authorizedAlways:
@@ -298,6 +301,17 @@ class SensorManager: NSObject, ObservableObject {
         return locationManager.authorizationStatus
     }
     
+    // MARK: - Background Location Setup
+    func setupBackgroundLocationIfAuthorized() {
+        // Only enable background location if we have "Always" authorization
+        if locationManager.authorizationStatus == .authorizedAlways {
+            locationManager.allowsBackgroundLocationUpdates = true
+            print("✅ Background location updates enabled")
+        } else {
+            print("⚠️ Background location not enabled - requires 'Always' authorization")
+        }
+    }
+    
     // MARK: - Cleanup
     deinit {
         // Clean up without calling main actor methods
@@ -333,6 +347,11 @@ extension SensorManager: CLLocationManagerDelegate {
         Task { @MainActor in
             isLocationAuthorized = (status == .authorizedWhenInUse || status == .authorizedAlways)
             
+            // Setup background location if we have "Always" authorization
+            if status == .authorizedAlways {
+                setupBackgroundLocationIfAuthorized()
+            }
+            
             if isLocationAuthorized && currentSession != nil {
                 startLocationMonitoring()
             } else if !isLocationAuthorized {
@@ -346,6 +365,10 @@ extension SensorManager: CLLocationManagerDelegate {
             guard let session = currentSession, session.isActive else { return }
             
             print("Exited geofence - ending session")
+            
+            // Send smart detection notification
+            EnhancedNotificationManager.shared.sendSmartDetectionNotification(for: session, detectionType: .location)
+            
             TimerManager.shared.completeSession(session, endSignal: .location)
         }
     }
