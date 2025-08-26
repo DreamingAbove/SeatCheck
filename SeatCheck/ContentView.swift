@@ -15,6 +15,8 @@ struct ContentView: View {
     
     @State private var showingNewSession = false
     @State private var showingCameraScan = false
+    @State private var showingChecklistSettings = false
+    @State private var showingSessionHistory = false
     @State private var selectedPreset: SessionPreset = .ride
     @State private var selectedDuration: TimeInterval = 1800 // 30 minutes
     @StateObject private var liveActivityManager = LiveActivityManager.shared
@@ -117,7 +119,7 @@ struct ContentView: View {
                         ScrollView {
                             LazyVStack(spacing: 8) {
                                 ForEach(sessions.prefix(5)) { session in
-                                    SessionHistoryRow(session: session)
+                                    RecentSessionRow(session: session)
                                 }
                             }
                             .padding(.horizontal, 20)
@@ -128,6 +130,25 @@ struct ContentView: View {
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    HStack(spacing: 16) {
+                        Button(action: {
+                            showingSessionHistory = true
+                        }) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.title2)
+                        }
+                        
+                        Button(action: {
+                            showingChecklistSettings = true
+                        }) {
+                            Image(systemName: "checklist")
+                                .font(.title2)
+                        }
+                    }
+                }
+            }
             .sheet(isPresented: $showingNewSession) {
                 NewSessionView(
                     selectedPreset: $selectedPreset,
@@ -137,6 +158,12 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingCameraScan) {
                 CameraScanView()
+            }
+            .sheet(isPresented: $showingChecklistSettings) {
+                ChecklistSettingsView()
+            }
+            .sheet(isPresented: $showingSessionHistory) {
+                SessionHistoryView()
             }
             .onAppear {
                 // Check for active sessions and recover timer state
@@ -152,9 +179,20 @@ struct ContentView: View {
         withAnimation {
             let newSession = Session(preset: selectedPreset, plannedDuration: selectedDuration)
             
-            // Add default checklist items
-            let defaultItems = ChecklistItem.defaultItems
-            for item in defaultItems {
+            // Get current settings or create new ones
+            let currentSettings: Settings
+            if let existing = settings.first {
+                currentSettings = existing
+            } else {
+                currentSettings = Settings()
+                modelContext.insert(currentSettings)
+            }
+            
+            // Add custom checklist items from settings, or fall back to defaults
+            let itemsToAdd = currentSettings.defaultChecklistItems.isEmpty ? 
+                ChecklistItem.defaultItems : currentSettings.defaultChecklistItems
+            
+            for item in itemsToAdd {
                 let newItem = ChecklistItem(title: item.title, icon: item.icon)
                 newItem.session = newSession
                 newSession.checklistItems.append(newItem)
@@ -162,12 +200,6 @@ struct ContentView: View {
             }
             
             modelContext.insert(newSession)
-            
-            // Ensure we have settings
-            if settings.isEmpty {
-                let newSettings = Settings()
-                modelContext.insert(newSettings)
-            }
             
             // Start Live Activity
             Task {
@@ -378,7 +410,8 @@ struct ActiveSessionView: View {
     }
 }
 
-struct SessionHistoryRow: View {
+// MARK: - Recent Session Row
+struct RecentSessionRow: View {
     let session: Session
     
     var body: some View {

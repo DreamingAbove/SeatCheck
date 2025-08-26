@@ -66,6 +66,7 @@ final class Settings {
     var notificationSoundEnabled: Bool
     var defaultSessionDuration: TimeInterval
     var defaultPreset: SessionPreset
+    var defaultChecklistItems: [ChecklistItem]
     var createdAt: Date
     var updatedAt: Date
     
@@ -78,6 +79,7 @@ final class Settings {
         self.notificationSoundEnabled = true
         self.defaultSessionDuration = 1800 // 30 minutes
         self.defaultPreset = .ride
+        self.defaultChecklistItems = []
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -118,6 +120,26 @@ enum EndSignal: String, CaseIterable, Codable {
     case motion = "Motion"
     case bluetooth = "Bluetooth"
     case manual = "Manual"
+    
+    var icon: String {
+        switch self {
+        case .timer: return "timer"
+        case .location: return "location"
+        case .motion: return "figure.walk"
+        case .bluetooth: return "bluetooth"
+        case .manual: return "hand.raised"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .timer: return .blue
+        case .location: return .green
+        case .motion: return .orange
+        case .bluetooth: return .purple
+        case .manual: return .red
+        }
+    }
 }
 
 // MARK: - Extensions
