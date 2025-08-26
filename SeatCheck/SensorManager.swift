@@ -41,6 +41,7 @@ class SensorManager: NSObject, ObservableObject {
     
     private var lastLocation: CLLocation?
     private var stationaryStartTime: Date?
+    private var locationAuthorizationContinuation: CheckedContinuation<Bool, Never>?
     
     private override init() {
         super.init()
@@ -65,23 +66,34 @@ class SensorManager: NSObject, ObservableObject {
     // MARK: - Authorization
     func requestLocationAuthorization() async -> Bool {
         let status = locationManager.authorizationStatus
+        print("📍 Current location authorization status: \(status.rawValue)")
         
         switch status {
         case .notDetermined:
+            print("📍 Requesting location authorization...")
             // Note: Info.plist must contain NSLocationWhenInUseUsageDescription
-            locationManager.requestWhenInUseAuthorization()
             return await withCheckedContinuation { continuation in
-                // We'll handle the result in the delegate
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                    let newStatus = self.locationManager.authorizationStatus
-                    self.isLocationAuthorized = (newStatus == .authorizedWhenInUse || newStatus == .authorizedAlways)
-                    continuation.resume(returning: self.isLocationAuthorized)
+                // Store the continuation to resume when delegate is called
+                self.locationAuthorizationContinuation = continuation
+                print("📍 Stored continuation, requesting authorization...")
+                locationManager.requestWhenInUseAuthorization()
+                
+                // Add a timeout to prevent hanging
+                Task {
+                    try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+                    if self.locationAuthorizationContinuation != nil {
+                        print("⚠️ Location authorization timeout, resuming with false")
+                        self.locationAuthorizationContinuation = nil
+                        continuation.resume(returning: false)
+                    }
                 }
             }
         case .authorizedWhenInUse, .authorizedAlways:
+            print("📍 Location already authorized")
             isLocationAuthorized = true
             return true
         default:
+            print("📍 Location authorization denied or restricted")
             isLocationAuthorized = false
             return false
         }
@@ -344,8 +356,20 @@ extension SensorManager: CLLocationManagerDelegate {
     }
     
     nonisolated func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
+        print("📍 Location authorization changed to: \(status.rawValue)")
+        
         Task { @MainActor in
             isLocationAuthorized = (status == .authorizedWhenInUse || status == .authorizedAlways)
+            print("📍 isLocationAuthorized set to: \(isLocationAuthorized)")
+            
+            // Resume continuation if we have one
+            if let continuation = locationAuthorizationContinuation {
+                print("📍 Resuming continuation with result: \(isLocationAuthorized)")
+                locationAuthorizationContinuation = nil
+                continuation.resume(returning: isLocationAuthorized)
+            } else {
+                print("📍 No continuation to resume")
+            }
             
             // Setup background location if we have "Always" authorization
             if status == .authorizedAlways {

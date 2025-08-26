@@ -13,6 +13,7 @@ import UserNotifications
 struct SeatCheckApp: App {
     @StateObject private var notificationManager = NotificationManager.shared
     @StateObject private var errorHandler = ErrorHandler.shared
+    @StateObject private var onboardingManager = OnboardingManager.shared
     
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -21,15 +22,63 @@ struct SeatCheckApp: App {
             Settings.self
         ])
         
-        // Create a more robust configuration that handles directory creation
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            allowsSave: true
-        )
+        // First, try to create the Application Support directory if it doesn't exist
+        do {
+            let fileManager = FileManager.default
+            let appSupportURL = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            
+            // Create the app-specific directory
+            let appDirectory = appSupportURL.appendingPathComponent("SeatCheck", isDirectory: true)
+            
+            if !fileManager.fileExists(atPath: appDirectory.path) {
+                try fileManager.createDirectory(
+                    at: appDirectory,
+                    withIntermediateDirectories: true,
+                    attributes: nil
+                )
+                print("✅ Created Application Support directory: \(appDirectory.path)")
+            }
+        } catch {
+            print("⚠️ Could not create Application Support directory: \(error)")
+        }
+        
+        // Create a more robust configuration with explicit URL
+        let modelConfiguration: ModelConfiguration
+        do {
+            let fileManager = FileManager.default
+            let appSupportURL = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let appDirectory = appSupportURL.appendingPathComponent("SeatCheck", isDirectory: true)
+            let storeURL = appDirectory.appendingPathComponent("SeatCheck.store")
+            
+            modelConfiguration = ModelConfiguration(
+                schema: schema,
+                url: storeURL,
+                allowsSave: true
+            )
+            print("📁 Using custom store URL: \(storeURL.path)")
+        } catch {
+            print("⚠️ Could not create custom URL, using default configuration")
+            modelConfiguration = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                allowsSave: true
+            )
+        }
 
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+            print("✅ Successfully created persistent ModelContainer")
+            return container
         } catch {
             // Fallback to in-memory storage if persistent storage fails
             print("⚠️ Failed to create persistent ModelContainer: \(error)")
@@ -41,8 +90,11 @@ struct SeatCheckApp: App {
             )
             
             do {
-                return try ModelContainer(for: schema, configurations: [fallbackConfiguration])
+                let fallbackContainer = try ModelContainer(for: schema, configurations: [fallbackConfiguration])
+                print("✅ Successfully created in-memory ModelContainer")
+                return fallbackContainer
             } catch {
+                print("❌ Failed to create even in-memory ModelContainer: \(error)")
                 fatalError("Could not create ModelContainer: \(error)")
             }
         }
@@ -50,13 +102,22 @@ struct SeatCheckApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(notificationManager)
-                .environmentObject(errorHandler)
-                .onAppear {
-                    setupNotifications()
-                }
-                .errorAlert()
+            if onboardingManager.shouldShowOnboarding {
+                OnboardingView()
+                    .environmentObject(notificationManager)
+                    .environmentObject(errorHandler)
+                    .onDisappear {
+                        onboardingManager.markOnboardingComplete()
+                    }
+            } else {
+                ContentView()
+                    .environmentObject(notificationManager)
+                    .environmentObject(errorHandler)
+                    .onAppear {
+                        setupNotifications()
+                    }
+                    .errorAlert()
+            }
         }
         .modelContainer(sharedModelContainer)
     }

@@ -14,10 +14,12 @@ struct ContentView: View {
     @Query private var settings: [Settings]
     
     @State private var showingNewSession = false
+    @State private var showingCustomSession = false
     @State private var showingCameraScan = false
     @State private var showingChecklistSettings = false
     @State private var showingSessionHistory = false
     @State private var showingNotificationSettings = false
+    @State private var showingQuickStartConfirmation = false
     @State private var selectedPreset: SessionPreset = .ride
     @State private var selectedDuration: TimeInterval = 1800 // 30 minutes
     @StateObject private var liveActivityManager = LiveActivityManager.shared
@@ -56,9 +58,7 @@ struct ContentView: View {
                     // Quick Start Buttons
                     VStack(spacing: 16) {
                         Button(action: {
-                            selectedPreset = .ride
-                            selectedDuration = 1800
-                            showingNewSession = true
+                            showQuickStartConfirmation()
                         }) {
                             HStack {
                                 Image(systemName: "car.fill")
@@ -74,7 +74,7 @@ struct ContentView: View {
                         }
                         
                         Button(action: {
-                            showingNewSession = true
+                            showingCustomSession = true
                         }) {
                             HStack {
                                 Image(systemName: "slider.horizontal.3")
@@ -154,16 +154,36 @@ struct ContentView: View {
                             Image(systemName: "bell")
                                 .font(.title2)
                         }
+                        
+                        Menu {
+                            Button("Reset Onboarding") {
+                                OnboardingManager.shared.resetOnboarding()
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.title2)
+                        }
                     }
                 }
             }
-            .sheet(isPresented: $showingNewSession) {
-                NewSessionView(
-                    selectedPreset: $selectedPreset,
-                    selectedDuration: $selectedDuration,
-                    onStart: startNewSession
-                )
-            }
+                            .sheet(isPresented: $showingNewSession) {
+                    NewSessionView(
+                        selectedPreset: $selectedPreset,
+                        selectedDuration: $selectedDuration,
+                        onStart: startNewSession
+                    )
+                }
+                .sheet(isPresented: $showingCustomSession) {
+                    CustomSessionBuilderView(onStart: startNewSession)
+                }
+                .alert("Start Quick Ride Session?", isPresented: $showingQuickStartConfirmation) {
+                    Button("Cancel", role: .cancel) { }
+                    Button("Start") {
+                        startQuickRide()
+                    }
+                } message: {
+                    Text("This will start a 30-minute ride session with default checklist items.")
+                }
             .sheet(isPresented: $showingCameraScan) {
                 CameraScanView()
             }
@@ -183,6 +203,46 @@ struct ContentView: View {
                 // Set up notification action handlers
                 setupNotificationHandlers()
             }
+        }
+    }
+    
+    private func showQuickStartConfirmation() {
+        showingQuickStartConfirmation = true
+    }
+    
+    private func startQuickRide() {
+        withAnimation {
+            let newSession = Session(preset: .ride, plannedDuration: 1800) // 30 minutes
+            
+            // Get current settings or create new ones
+            let currentSettings: Settings
+            if let existing = settings.first {
+                currentSettings = existing
+            } else {
+                currentSettings = Settings()
+                modelContext.insert(currentSettings)
+            }
+            
+            // Add default checklist items
+            let itemsToAdd = currentSettings.defaultChecklistItems.isEmpty ? 
+                ChecklistItem.defaultItems : currentSettings.defaultChecklistItems
+            
+            for item in itemsToAdd {
+                let newItem = ChecklistItem(title: item.title, icon: item.icon)
+                newItem.session = newSession
+                newSession.checklistItems.append(newItem)
+                modelContext.insert(newItem)
+            }
+            
+            modelContext.insert(newSession)
+            
+            // Start Live Activity
+            Task {
+                await liveActivityManager.startLiveActivity(for: newSession)
+            }
+            
+            // Start Timer
+            timerManager.startTimer(for: newSession)
         }
     }
     
@@ -207,7 +267,7 @@ struct ContentView: View {
                 let newItem = ChecklistItem(title: item.title, icon: item.icon)
                 newItem.session = newSession
                 newSession.checklistItems.append(newItem)
-                modelContext.insert(newItem)
+            modelContext.insert(newItem)
             }
             
             modelContext.insert(newSession)
@@ -534,12 +594,30 @@ struct NewSessionView: View {
     let onStart: () -> Void
     @Environment(\.dismiss) private var dismiss
     
+    @State private var isCustomDuration = false
+    @State private var customHours = 0
+    @State private var customMinutes = 30
+    
+    init(selectedPreset: Binding<SessionPreset>, selectedDuration: Binding<TimeInterval>, onStart: @escaping () -> Void) {
+        self._selectedPreset = selectedPreset
+        self._selectedDuration = selectedDuration
+        self.onStart = onStart
+        
+        // Initialize custom duration if needed
+        if selectedDuration.wrappedValue == -1 {
+            self._isCustomDuration = State(initialValue: true)
+            self._customHours = State(initialValue: 0)
+            self._customMinutes = State(initialValue: 30)
+        }
+    }
+    
     private let durationOptions: [(String, TimeInterval)] = [
         ("15 min", 900),
         ("30 min", 1800),
         ("1 hour", 3600),
         ("1.5 hours", 5400),
-        ("2 hours", 7200)
+        ("2 hours", 7200),
+        ("Custom", -1) // Special value to indicate custom duration
     ]
     
     var body: some View {
@@ -572,6 +650,61 @@ struct NewSessionView: View {
                         }
                     }
                     .pickerStyle(SegmentedPickerStyle())
+                    .onChange(of: selectedDuration) { _, newValue in
+                        isCustomDuration = (newValue == -1)
+                        if isCustomDuration {
+                            selectedDuration = TimeInterval(customHours * 3600 + customMinutes * 60)
+                        }
+                    }
+                    
+                    // Custom Duration Picker
+                    if isCustomDuration {
+                        VStack(spacing: 16) {
+                            HStack(spacing: 20) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Hours")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Picker("Hours", selection: $customHours) {
+                                        ForEach(0...23, id: \.self) { hour in
+                                            Text("\(hour)").tag(hour)
+                                        }
+                                    }
+                                    .pickerStyle(WheelPickerStyle())
+                                    .frame(width: 80)
+                                    .onChange(of: customHours) { _, _ in
+                                        selectedDuration = TimeInterval(customHours * 3600 + customMinutes * 60)
+                                    }
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Minutes")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Picker("Minutes", selection: $customMinutes) {
+                                        ForEach(0...59, id: \.self) { minute in
+                                            Text("\(minute)").tag(minute)
+                                        }
+                                    }
+                                    .pickerStyle(WheelPickerStyle())
+                                    .frame(width: 80)
+                                    .onChange(of: customMinutes) { _, _ in
+                                        selectedDuration = TimeInterval(customHours * 3600 + customMinutes * 60)
+                                    }
+                                }
+                            }
+                            
+                            Text("Total: \(formatCustomDuration(selectedDuration))")
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
+                                .fontWeight(.medium)
+                        }
+                        .padding()
+                        .background(Color.gray.opacity(0.1))
+                        .cornerRadius(12)
+                    }
                 }
                 
                 Spacer()
@@ -585,10 +718,11 @@ struct NewSessionView: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.blue)
+                        .background(selectedDuration > 0 ? Color.blue : Color.gray)
                         .foregroundColor(.white)
                         .cornerRadius(12)
                 }
+                .disabled(selectedDuration <= 0)
             }
             .padding()
             .navigationTitle("New Session")
@@ -600,6 +734,17 @@ struct NewSessionView: View {
                     }
                 }
             }
+        }
+    }
+    
+    private func formatCustomDuration(_ duration: TimeInterval) -> String {
+        let hours = Int(duration) / 3600
+        let minutes = Int(duration) % 3600 / 60
+        
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else {
+            return "\(minutes)m"
         }
     }
 }
@@ -630,6 +775,293 @@ struct PresetButton: View {
         }
     }
 }
+
+// MARK: - Custom Session Builder View
+struct CustomSessionBuilderView: View {
+    let onStart: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query private var settings: [Settings]
+    
+    @State private var sessionName = ""
+    @State private var selectedPreset: SessionPreset = .custom
+    @State private var customHours = 0
+    @State private var customMinutes = 30
+    @State private var customChecklistItems: [ChecklistItem] = []
+    @State private var showingAddItem = false
+    @State private var showingSaveTemplate = false
+    @State private var templateName = ""
+    @State private var newItemTitle = ""
+    @State private var newItemIcon = "checkmark.circle"
+    
+    private var totalDuration: TimeInterval {
+        TimeInterval(customHours * 3600 + customMinutes * 60)
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 24) {
+                    sessionNameSection
+                    sessionTypeSection
+                    durationSection
+                    checklistSection
+                    
+                    Spacer(minLength: 40)
+                    
+                    startButton
+                }
+                .padding()
+            }
+            .navigationTitle("Custom Session")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save Template") {
+                        showingSaveTemplate = true
+                    }
+                    .disabled(sessionName.isEmpty || totalDuration <= 0)
+                }
+            }
+            .sheet(isPresented: $showingAddItem) {
+                AddChecklistItemView(
+                    title: $newItemTitle,
+                    icon: $newItemIcon,
+                    onSave: {
+                        let newItem = ChecklistItem(title: newItemTitle, icon: newItemIcon)
+                        customChecklistItems.append(newItem)
+                        newItemTitle = ""
+                        newItemIcon = "checkmark.circle"
+                        showingAddItem = false
+                    }
+                )
+            }
+            .alert("Save as Template?", isPresented: $showingSaveTemplate) {
+                TextField("Template name", text: $templateName)
+                Button("Cancel", role: .cancel) { }
+                Button("Save") {
+                    saveTemplate()
+                }
+            } message: {
+                Text("Save this custom session as a template for future use.")
+            }
+            .onAppear {
+                loadDefaultItems()
+            }
+        }
+    }
+    
+    // MARK: - View Components
+    private var sessionNameSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Session Name")
+                .font(.headline)
+            
+            TextField("Enter session name", text: $sessionName)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+        }
+    }
+    
+    private var sessionTypeSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Session Type")
+                .font(.headline)
+            
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
+                ForEach(SessionPreset.allCases, id: \.self) { preset in
+                    PresetButton(
+                        preset: preset,
+                        isSelected: selectedPreset == preset,
+                        action: { selectedPreset = preset }
+                    )
+                }
+            }
+        }
+    }
+    
+    private var durationSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Duration")
+                .font(.headline)
+            
+            HStack(spacing: 20) {
+                hoursPicker
+                minutesPicker
+            }
+            
+            Text("Total: \(formatDuration(totalDuration))")
+                .font(.subheadline)
+                .foregroundColor(.blue)
+                .fontWeight(.medium)
+        }
+    }
+    
+    private var hoursPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Hours")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Picker("Hours", selection: $customHours) {
+                ForEach(0...23, id: \.self) { hour in
+                    Text("\(hour)").tag(hour)
+                }
+            }
+            .pickerStyle(WheelPickerStyle())
+            .frame(width: 80)
+        }
+    }
+    
+    private var minutesPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Minutes")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            Picker("Minutes", selection: $customMinutes) {
+                ForEach(0...59, id: \.self) { minute in
+                    Text("\(minute)").tag(minute)
+                }
+            }
+            .pickerStyle(WheelPickerStyle())
+            .frame(width: 80)
+        }
+    }
+    
+    private var checklistSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Checklist Items")
+                    .font(.headline)
+                
+                Spacer()
+                
+                Button("Add Item") {
+                    showingAddItem = true
+                }
+                .font(.caption)
+                .foregroundColor(.blue)
+            }
+            
+            if customChecklistItems.isEmpty {
+                Text("No items added yet")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.gray.opacity(0.1))
+                    .cornerRadius(8)
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(customChecklistItems.indices, id: \.self) { index in
+                        checklistItemRow(for: index)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func checklistItemRow(for index: Int) -> some View {
+        HStack {
+            Image(systemName: customChecklistItems[index].icon)
+                .foregroundColor(.blue)
+                .frame(width: 20)
+                
+            Text(customChecklistItems[index].title)
+                .font(.subheadline)
+            
+            Spacer()
+            
+            Button(action: {
+                customChecklistItems.remove(at: index)
+            }) {
+                Image(systemName: "trash")
+                    .foregroundColor(.red)
+                    .font(.caption)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(8)
+    }
+    
+    private var startButton: some View {
+        Button(action: {
+            startCustomSession()
+            dismiss()
+        }) {
+            Text("Start Custom Session")
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(totalDuration > 0 ? Color.blue : Color.gray)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+        }
+        .disabled(totalDuration <= 0)
+    }
+    
+    // MARK: - Helper Methods
+    private func formatDuration(_ duration: TimeInterval) -> String {
+        let hours = Int(duration) / 3600
+        let minutes = Int(duration) % 3600 / 60
+        
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else {
+            return "\(minutes)m"
+        }
+    }
+    
+    private func loadDefaultItems() {
+        // Load default items from settings or use system defaults
+        let currentSettings: Settings
+        if let existing = settings.first {
+            currentSettings = existing
+        } else {
+            currentSettings = Settings()
+            modelContext.insert(currentSettings)
+        }
+        
+        let defaultItems = currentSettings.defaultChecklistItems.isEmpty ? 
+            ChecklistItem.defaultItems : currentSettings.defaultChecklistItems
+        
+        customChecklistItems = defaultItems.map { item in
+            ChecklistItem(title: item.title, icon: item.icon)
+        }
+    }
+    
+    private func saveTemplate() {
+        // TODO: Implement template saving
+        // This would save the current configuration as a template
+        print("Saving template: \(templateName)")
+    }
+    
+    private func startCustomSession() {
+        // Create session with custom duration
+        let newSession = Session(preset: selectedPreset, plannedDuration: totalDuration)
+        
+        // Add custom checklist items
+        for item in customChecklistItems {
+            let newItem = ChecklistItem(title: item.title, icon: item.icon)
+            newItem.session = newSession
+            newSession.checklistItems.append(newItem)
+            // Note: We don't insert into modelContext here as it's not a persistent item
+        }
+        
+        // Call the onStart callback to handle session creation
+        onStart()
+    }
+}
+
+
 
 #Preview {
     ContentView()
