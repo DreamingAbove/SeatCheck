@@ -10,9 +10,22 @@
 		3E1EAD782E5D12CD00FAAC78 /* SeatCheck.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SeatCheck.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		3E4D94BC2E5D423E00029CFE /* Exceptions for "SeatCheck" folder in "SeatCheck" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 3E1EAD772E5D12CD00FAAC78 /* SeatCheck */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		3E1EAD7A2E5D12CD00FAAC78 /* SeatCheck */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3E4D94BC2E5D423E00029CFE /* Exceptions for "SeatCheck" folder in "SeatCheck" target */,
+			);
 			path = SeatCheck;
 			sourceTree = "<group>";
 		};
@@ -255,6 +268,7 @@
 				DEVELOPMENT_TEAM = NFDPF9LUPN;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SeatCheck/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SeatCheck;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -287,6 +301,7 @@
 				DEVELOPMENT_TEAM = NFDPF9LUPN;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SeatCheck/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SeatCheck;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

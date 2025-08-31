@@ -6,7 +6,6 @@ import UIKit
 struct CameraScanView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var cameraManager = CameraManager()
-    @State private var showingPermissionAlert = false
     @State private var showingSettingsAlert = false
     
     var body: some View {
@@ -81,7 +80,10 @@ struct CameraScanView: View {
             .onAppear {
                 cameraManager.checkPermissions()
             }
-            .alert("Camera Permission Required", isPresented: $showingPermissionAlert) {
+            .onDisappear {
+                cameraManager.stopSession()
+            }
+            .alert("Camera Permission Required", isPresented: $cameraManager.showingPermissionAlert) {
                 Button("Settings") {
                     showingSettingsAlert = true
                 }
@@ -114,18 +116,27 @@ struct CameraPreviewView: UIViewRepresentable {
         let view = UIView(frame: UIScreen.main.bounds)
         view.backgroundColor = .black
         
+        // Add preview layer when it becomes available
         if let previewLayer = cameraManager.previewLayer {
             previewLayer.frame = view.bounds
             previewLayer.videoGravity = .resizeAspectFill
             view.layer.addSublayer(previewLayer)
+            print("Preview layer added to view")
         }
         
         return view
     }
     
     func updateUIView(_ uiView: UIView, context: Context) {
+        // Update preview layer frame and add it if not already added
         if let previewLayer = cameraManager.previewLayer {
             previewLayer.frame = uiView.bounds
+            
+            // Only add if not already in the layer hierarchy
+            if previewLayer.superlayer == nil {
+                uiView.layer.addSublayer(previewLayer)
+                print("Preview layer added to view in update")
+            }
         }
     }
 }
@@ -136,11 +147,13 @@ class CameraManager: NSObject, ObservableObject {
     @Published var isCameraAuthorized = false
     @Published var isFlashOn = false
     @Published var capturedImage: UIImage?
+    @Published var showingPermissionAlert = false
     
     private var captureSession: AVCaptureSession?
     private var videoOutput: AVCapturePhotoOutput?
     private var videoInput: AVCaptureDeviceInput?
     private var currentCamera: AVCaptureDevice?
+    private var isUsingFrontCamera = false
     
     var previewLayer: AVCaptureVideoPreviewLayer?
     
@@ -150,48 +163,59 @@ class CameraManager: NSObject, ObservableObject {
     }
     
     private func setupCaptureSession() {
+        print("Setting up capture session...")
         captureSession = AVCaptureSession()
         captureSession?.sessionPreset = .photo
         
-        guard let captureSession = captureSession else { return }
+        guard let captureSession = captureSession else { 
+            print("Failed to create capture session")
+            return 
+        }
         
         // Setup video output
         videoOutput = AVCapturePhotoOutput()
         if let videoOutput = videoOutput, captureSession.canAddOutput(videoOutput) {
             captureSession.addOutput(videoOutput)
+            print("Video output added successfully")
+        } else {
+            print("Failed to add video output")
         }
         
         // Setup preview layer
         previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
-        
-        // Setup initial camera
-        setupCamera()
+        previewLayer?.videoGravity = .resizeAspectFill
+        print("Preview layer created")
     }
     
     private func setupCamera() {
         guard let captureSession = captureSession else { return }
         
+        print("Setting up camera...")
+        
         // Remove existing input
         if let existingInput = videoInput {
             captureSession.removeInput(existingInput)
+            print("Removed existing camera input")
         }
         
         // Get camera device
-        let deviceType: AVCaptureDevice.DeviceType = currentCamera?.position == .front ? .builtInWideAngleCamera : .builtInWideAngleCamera
-        let position: AVCaptureDevice.Position = currentCamera?.position == .front ? .back : .front
-        
-        guard let camera = AVCaptureDevice.default(deviceType, for: .video, position: position) else {
-            print("Failed to get camera device")
+        let position: AVCaptureDevice.Position = isUsingFrontCamera ? .front : .back
+        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position) else {
+            print("Failed to get camera device for position: \(position)")
             return
         }
         
         currentCamera = camera
+        print("Got camera device: \(camera.localizedName)")
         
         // Setup input
         do {
             videoInput = try AVCaptureDeviceInput(device: camera)
             if let videoInput = videoInput, captureSession.canAddInput(videoInput) {
                 captureSession.addInput(videoInput)
+                print("Successfully added camera input for position: \(position)")
+            } else {
+                print("Failed to add camera input")
             }
         } catch {
             print("Failed to setup camera input: \(error)")
@@ -199,63 +223,129 @@ class CameraManager: NSObject, ObservableObject {
     }
     
     func checkPermissions() {
+        print("Checking camera permissions...")
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
+            print("Camera already authorized")
             isCameraAuthorized = true
-            startSession()
+            initializeCameraAndStartSession()
         case .notDetermined:
+            print("Requesting camera permission...")
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
                 Task { @MainActor in
+                    print("Camera permission result: \(granted)")
                     self?.isCameraAuthorized = granted
                     if granted {
-                        self?.startSession()
+                        self?.initializeCameraAndStartSession()
+                    } else {
+                        self?.showingPermissionAlert = true
                     }
                 }
             }
         case .denied, .restricted:
+            print("Camera permission denied or restricted")
             isCameraAuthorized = false
+            showingPermissionAlert = true
         @unknown default:
+            print("Unknown camera permission status")
             isCameraAuthorized = false
+            showingPermissionAlert = true
+        }
+    }
+    
+    private func initializeCameraAndStartSession() {
+        print("Initializing camera and starting session...")
+        
+        // Setup camera first
+        setupCamera()
+        
+        // Then start session
+        startSession()
+        
+        // Force a UI update after a short delay
+        Task {
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+            print("Forcing delayed UI update")
+            objectWillChange.send()
         }
     }
     
     func startSession() {
+        guard let captureSession = captureSession else { 
+            print("No capture session to start")
+            return 
+        }
+        
+        print("Starting camera session...")
+        
+        // Start session on background thread
         Task.detached {
-            await self.captureSession?.startRunning()
+            if !captureSession.isRunning {
+                captureSession.startRunning()
+                print("Camera session started successfully")
+                
+                // Force UI update on main thread
+                await MainActor.run {
+                    print("Forcing UI update after session start")
+                    self.objectWillChange.send()
+                }
+            } else {
+                print("Camera session already running")
+            }
         }
     }
     
     func stopSession() {
+        guard let captureSession = captureSession else { return }
+        
+        print("Stopping camera session...")
         Task.detached {
-            await self.captureSession?.stopRunning()
+            if captureSession.isRunning {
+                captureSession.stopRunning()
+                print("Camera session stopped")
+            }
         }
     }
     
     func switchCamera() {
-        // Simple camera switching - the heavy work is already done in setupCamera()
+        print("Switching camera...")
+        isUsingFrontCamera.toggle()
         setupCamera()
+        print("Switched to \(isUsingFrontCamera ? "front" : "back") camera")
     }
     
     func toggleFlash() {
-        guard let camera = currentCamera, camera.hasFlash else { return }
+        guard let camera = currentCamera, camera.hasFlash else { 
+            print("Camera doesn't support flash")
+            return 
+        }
         
         do {
             try camera.lockForConfiguration()
             if camera.torchMode == .off {
                 camera.torchMode = .on
                 isFlashOn = true
+                print("Flash turned on")
             } else {
                 camera.torchMode = .off
                 isFlashOn = false
+                print("Flash turned off")
             }
             camera.unlockForConfiguration()
+            
+            // Force UI update after flash toggle
+            print("Forcing UI update after flash toggle")
+            objectWillChange.send()
         } catch {
             print("Failed to toggle flash: \(error)")
         }
     }
     
     func capturePhoto() {
-        guard let videoOutput = videoOutput else { return }
+        guard let videoOutput = videoOutput else { 
+            print("Video output not available")
+            return 
+        }
         
         let settings = AVCapturePhotoSettings()
         if let camera = currentCamera, camera.hasFlash {
@@ -263,6 +353,7 @@ class CameraManager: NSObject, ObservableObject {
         }
         
         videoOutput.capturePhoto(with: settings, delegate: self)
+        print("Photo capture initiated")
     }
     
     func openPhotoLibrary() {
