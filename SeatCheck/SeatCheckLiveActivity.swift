@@ -24,14 +24,14 @@ class LiveActivityManager: ObservableObject {
         
         let attributes = SeatCheckAttributes(
             sessionId: session.id,
-            preset: session.preset.rawValue,
+            preset: session.displayName,
             startTime: session.startAt,
             plannedDuration: session.plannedDuration
         )
         
         let contentState = SeatCheckAttributes.ContentState(
             sessionId: session.id,
-            preset: session.preset.rawValue,
+            preset: session.displayName,
             startTime: session.startAt,
             plannedDuration: session.plannedDuration,
             remainingTime: session.remainingTime,
@@ -58,7 +58,7 @@ class LiveActivityManager: ObservableObject {
         
         let contentState = SeatCheckAttributes.ContentState(
             sessionId: session.id,
-            preset: session.preset.rawValue,
+            preset: session.displayName,
             startTime: session.startAt,
             plannedDuration: session.plannedDuration,
             remainingTime: session.remainingTime,

@@ -14,6 +14,7 @@ import SwiftUI
 final class Session {
     var id: UUID
     var preset: SessionPreset
+    var name: String?
     var startAt: Date
     var plannedDuration: TimeInterval
     var endSignal: EndSignal?
@@ -22,9 +23,10 @@ final class Session {
     var checklistItems: [ChecklistItem]
     var createdAt: Date
     
-    init(preset: SessionPreset, plannedDuration: TimeInterval) {
+    init(preset: SessionPreset, plannedDuration: TimeInterval, name: String? = nil) {
         self.id = UUID()
         self.preset = preset
+        self.name = name
         self.startAt = Date()
         self.plannedDuration = plannedDuration
         self.endSignal = nil
@@ -32,6 +34,10 @@ final class Session {
         self.completedAt = nil
         self.checklistItems = []
         self.createdAt = Date()
+    }
+    
+    var displayName: String {
+        return name ?? preset.rawValue
     }
 }
 

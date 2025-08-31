@@ -68,7 +68,7 @@ struct SessionDetailView: View {
                     .foregroundColor(.blue)
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(session.preset.rawValue)
+                    Text(session.displayName)
                         .font(.title2)
                         .fontWeight(.bold)
                     

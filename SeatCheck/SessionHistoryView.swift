@@ -235,7 +235,7 @@ struct SessionHistoryRow: View {
             
             // Session Details
             VStack(alignment: .leading, spacing: 4) {
-                Text(session.preset.rawValue)
+                Text(session.displayName)
                     .font(.headline)
                     .foregroundColor(.primary)
                 

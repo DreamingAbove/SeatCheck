@@ -174,7 +174,9 @@ struct ContentView: View {
                     )
                 }
                 .sheet(isPresented: $showingCustomSession) {
-                    CustomSessionBuilderView(onStart: startNewSession)
+                    CustomSessionBuilderView { preset, duration, items, name in
+                        startCustomSession(preset: preset, duration: duration, customItems: items, sessionName: name)
+                    }
                 }
                 .alert("Start Quick Ride Session?", isPresented: $showingQuickStartConfirmation) {
                     Button("Cancel", role: .cancel) { }
@@ -246,7 +248,7 @@ struct ContentView: View {
         }
     }
     
-    private func startNewSession() {
+        private func startNewSession() {
         withAnimation {
             let newSession = Session(preset: selectedPreset, plannedDuration: selectedDuration)
             
@@ -267,7 +269,31 @@ struct ContentView: View {
                 let newItem = ChecklistItem(title: item.title, icon: item.icon)
                 newItem.session = newSession
                 newSession.checklistItems.append(newItem)
-            modelContext.insert(newItem)
+                modelContext.insert(newItem)
+            }
+            
+            modelContext.insert(newSession)
+            
+            // Start Live Activity
+            Task {
+                await liveActivityManager.startLiveActivity(for: newSession)
+            }
+            
+            // Start Timer
+            timerManager.startTimer(for: newSession)
+        }
+    }
+    
+    private func startCustomSession(preset: SessionPreset, duration: TimeInterval, customItems: [ChecklistItem], sessionName: String) {
+        withAnimation {
+            let newSession = Session(preset: preset, plannedDuration: duration, name: sessionName)
+            
+            // Add custom checklist items
+            for item in customItems {
+                let newItem = ChecklistItem(title: item.title, icon: item.icon)
+                newItem.session = newSession
+                newSession.checklistItems.append(newItem)
+                modelContext.insert(newItem)
             }
             
             modelContext.insert(newSession)
@@ -467,7 +493,7 @@ struct ActiveSessionView: View {
             HStack {
                 Image(systemName: session.preset.icon)
                     .font(.title2)
-                Text(session.preset.rawValue)
+                Text(session.displayName)
                     .font(.headline)
                 Spacer()
                 Text(session.startAt, style: .time)
@@ -778,7 +804,7 @@ struct PresetButton: View {
 
 // MARK: - Custom Session Builder View
 struct CustomSessionBuilderView: View {
-    let onStart: () -> Void
+    let onStart: (SessionPreset, TimeInterval, [ChecklistItem], String) -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var settings: [Settings]
@@ -1005,7 +1031,7 @@ struct CustomSessionBuilderView: View {
                 .foregroundColor(.white)
                 .cornerRadius(12)
         }
-        .disabled(totalDuration <= 0)
+        .disabled(totalDuration <= 0 || sessionName.isEmpty)
     }
     
     // MARK: - Helper Methods
@@ -1057,7 +1083,7 @@ struct CustomSessionBuilderView: View {
         }
         
         // Call the onStart callback to handle session creation
-        onStart()
+        onStart(selectedPreset, totalDuration, customChecklistItems, sessionName)
     }
 }
 
