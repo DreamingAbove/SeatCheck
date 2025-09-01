@@ -450,6 +450,11 @@ struct OnboardingView: View {
     private func requestNotificationPermission() {
         Task {
             print("🔔 Requesting notification permission...")
+            
+            // Check current status first
+            let currentStatus = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            print("🔔 Current status before request: \(currentStatus.rawValue)")
+            
             let _ = await notificationManager.requestAuthorization()
             
             await MainActor.run {
@@ -460,9 +465,21 @@ struct OnboardingView: View {
                     successAlertMessage = "Notifications enabled! You'll now receive session reminders, smart alerts, and achievement notifications."
                     showingSuccessAlert = true
                 } else {
-                    // Show alert to guide user to settings
-                    permissionAlertMessage = "Notifications help you stay on top of your belongings with session reminders and smart alerts. You can enable them later in Settings."
-                    showingPermissionAlert = true
+                    // Check if this was the first time asking or if user previously denied
+                    let newStatus = notificationManager.authorizationStatus
+                    if currentStatus == .notDetermined && newStatus == .denied {
+                        // User just denied for the first time - show gentle message
+                        permissionAlertMessage = "No problem! You can always enable notifications later in Settings to get helpful reminders about your belongings."
+                        showingPermissionAlert = true
+                    } else if newStatus == .denied {
+                        // User previously denied - guide them to settings
+                        permissionAlertMessage = "To receive session reminders and smart alerts, you can enable notifications in Settings > SeatCheck > Notifications."
+                        showingPermissionAlert = true
+                    } else {
+                        // Other cases (restricted, etc.)
+                        permissionAlertMessage = "Notifications help you stay on top of your belongings with session reminders and smart alerts. You can enable them later in Settings."
+                        showingPermissionAlert = true
+                    }
                 }
             }
         }

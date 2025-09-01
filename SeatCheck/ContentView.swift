@@ -204,9 +204,11 @@ struct ContentView: View {
                     )
                 }
                 .sheet(isPresented: $showingCustomSession) {
-                    CustomSessionBuilderView { preset, duration, items, name in
-                        startCustomSession(preset: preset, duration: duration, customItems: items, sessionName: name)
-                    }
+                    CustomSessionBuilderView(
+                        onStart: { preset, duration, items, name in
+                            startCustomSession(preset: preset, duration: duration, customItems: items, sessionName: name)
+                        }, preScannedItems: preScannedItems
+                    )
                 }
                 .sheet(isPresented: $showingTemplateSelection) {
                     TemplateSelectionView { template in
@@ -618,7 +620,8 @@ struct ActiveSessionView: View {
     @StateObject private var sensorManager = SensorManager.shared
     
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
+            // Session Header
             HStack {
                 Image(systemName: session.preset.icon)
                     .font(.title2)
@@ -630,6 +633,7 @@ struct ActiveSessionView: View {
                     .foregroundColor(.secondary)
             }
             
+            // Timer Progress
             ProgressView(value: timerManager.progress(for: session))
                 .progressViewStyle(LinearProgressViewStyle())
             
@@ -637,6 +641,9 @@ struct ActiveSessionView: View {
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(timerManager.isSessionExpired ? .red : .primary)
+            
+            // Compact Checklist Preview
+            compactChecklistPreview
             
             // Sensor Status Indicator
             HStack(spacing: 8) {
@@ -683,6 +690,72 @@ struct ActiveSessionView: View {
         .background(Color.gray.opacity(0.1))
         .cornerRadius(12)
         .padding(.horizontal, 20)
+    }
+    
+    // MARK: - Compact Checklist Preview
+    private var compactChecklistPreview: some View {
+        let completedCount = session.checklistItems.filter { $0.isCollected }.count
+        let totalCount = session.checklistItems.count
+        
+        return VStack(spacing: 8) {
+            HStack {
+                Text("Your Items")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                Text("\(completedCount)/\(totalCount)")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(completedCount == totalCount ? .green : .blue)
+            }
+            
+            if totalCount > 0 {
+                // Show first 3 items as preview
+                LazyVStack(spacing: 4) {
+                    ForEach(Array(session.checklistItems.prefix(3)), id: \.id) { item in
+                        HStack {
+                            Image(systemName: item.icon)
+                                .foregroundColor(item.isCollected ? .green : .blue)
+                                .frame(width: 16)
+                            
+                            Text(item.title)
+                                .font(.caption)
+                                .strikethrough(item.isCollected)
+                                .foregroundColor(item.isCollected ? .secondary : .primary)
+                            
+                            Spacer()
+                            
+                            Image(systemName: item.isCollected ? "checkmark.circle.fill" : "circle")
+                                .foregroundColor(item.isCollected ? .green : .gray)
+                                .font(.caption)
+                        }
+                    }
+                }
+                
+                if totalCount > 3 {
+                    Text("+ \(totalCount - 3) more items")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                
+                // Quick completion indicator
+                if completedCount == totalCount {
+                    Text("🎉 All items collected!")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.green)
+                }
+            } else {
+                Text("No items in checklist")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .background(Color.blue.opacity(0.05))
+        .cornerRadius(8)
     }
     
     private func timeString(from timeInterval: TimeInterval) -> String {
@@ -958,6 +1031,7 @@ struct CompactPresetButton: View {
 // MARK: - Custom Session Builder View
 struct CustomSessionBuilderView: View {
     let onStart: (SessionPreset, TimeInterval, [ChecklistItem], String) -> Void
+    let preScannedItems: [ScannedItem]
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Query private var settings: [Settings]
@@ -972,6 +1046,7 @@ struct CustomSessionBuilderView: View {
     @State private var templateName = ""
     @State private var newItemTitle = ""
     @State private var newItemIcon = "checkmark.circle"
+    @State private var hasAddedScannedItems = false
     
     private var totalDuration: TimeInterval {
         TimeInterval(customHours * 3600 + customMinutes * 60)
@@ -1032,6 +1107,14 @@ struct CustomSessionBuilderView: View {
             }
             .onAppear {
                 loadDefaultItems()
+                // Convert pre-scanned items to checklist items (only once)
+                if !hasAddedScannedItems && !preScannedItems.isEmpty {
+                    for scannedItem in preScannedItems {
+                        let checklistItem = ChecklistItem(title: scannedItem.title, icon: scannedItem.icon)
+                        customChecklistItems.append(checklistItem)
+                    }
+                    hasAddedScannedItems = true
+                }
             }
         }
     }
@@ -1134,6 +1217,22 @@ struct CustomSessionBuilderView: View {
                 .foregroundColor(.blue)
             }
             
+            // Show scanned items indicator if we have pre-scanned items
+            if !preScannedItems.isEmpty {
+                HStack {
+                    Image(systemName: "camera.fill")
+                        .foregroundColor(.green)
+                        .font(.caption)
+                    Text("\(preScannedItems.count) scanned item\(preScannedItems.count == 1 ? "" : "s") added")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(6)
+            }
+            
             if customChecklistItems.isEmpty {
                 Text("No items added yet")
                     .font(.caption)
@@ -1160,6 +1259,13 @@ struct CustomSessionBuilderView: View {
                 
             Text(customChecklistItems[index].title)
                 .font(.subheadline)
+            
+            // Show camera icon for scanned items
+            if index < preScannedItems.count {
+                Image(systemName: "camera.fill")
+                    .foregroundColor(.green)
+                    .font(.caption2)
+            }
             
             Spacer()
             
@@ -1206,18 +1312,21 @@ struct CustomSessionBuilderView: View {
     }
     
     private func loadDefaultItems() {
-        // Load default items from settings
-        let currentSettings: Settings
-        if let existing = settings.first {
-            currentSettings = existing
-        } else {
-            currentSettings = Settings()
-            modelContext.insert(currentSettings)
-        }
-        
-        // Use user's default items if they have any set
-        customChecklistItems = currentSettings.defaultChecklistItems.map { item in
-            ChecklistItem(title: item.title, icon: item.icon)
+        // Only load defaults if we don't have pre-scanned items
+        if preScannedItems.isEmpty {
+            // Load default items from settings
+            let currentSettings: Settings
+            if let existing = settings.first {
+                currentSettings = existing
+            } else {
+                currentSettings = Settings()
+                modelContext.insert(currentSettings)
+            }
+            
+            // Use user's default items if they have any set
+            customChecklistItems = currentSettings.defaultChecklistItems.map { item in
+                ChecklistItem(title: item.title, icon: item.icon)
+            }
         }
     }
     

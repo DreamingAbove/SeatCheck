@@ -9,6 +9,8 @@ struct PreSessionScanView: View {
     @State private var showingCamera = false
     @State private var newItemTitle = ""
     @State private var showingAddItem = false
+    @State private var showingSuccessMessage = false
+    @State private var lastAddedItem: ScannedItem?
     
     var body: some View {
         NavigationStack {
@@ -124,11 +126,45 @@ struct PreSessionScanView: View {
             .sheet(isPresented: $showingCamera) {
                 CameraScanView { capturedItem in
                     scannedItems.append(capturedItem)
+                    lastAddedItem = capturedItem
+                    // Automatically dismiss camera and return to inventory screen
+                    showingCamera = false
+                    // Show success message
+                    showingSuccessMessage = true
                 }
             }
             .sheet(isPresented: $showingAddItem) {
                 AddScannedItemView { item in
                     scannedItems.append(item)
+                }
+            }
+            .overlay {
+                if showingSuccessMessage {
+                    VStack {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Text("\(lastAddedItem?.title ?? "Item") added to inventory!")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                        }
+                        .padding()
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                        .padding(.top, 60) // Position at top instead of bottom
+                        
+                        Spacer()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.easeInOut(duration: 0.3), value: showingSuccessMessage)
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            withAnimation {
+                                showingSuccessMessage = false
+                            }
+                        }
+                    }
                 }
             }
         }

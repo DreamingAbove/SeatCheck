@@ -25,14 +25,24 @@ struct SessionDetailView: View {
                     // Session Header
                     sessionHeader
                     
+                    // Checklist Progress Banner (for active sessions)
+                    if session.isActive {
+                        checklistProgressBanner
+                    }
+                    
+                    // Checklist Items - Priority #1 for active sessions
+                    checklistSection
+                    
                     // Timer Display
                     timerDisplay
                     
-                    // Checklist Items
-                    checklistSection
-                    
                     // Session Statistics
                     statisticsSection
+                    
+                    // Quick Actions (for active sessions)
+                    if session.isActive {
+                        quickActionsSection
+                    }
                     
                     // Sensor Status
                     sensorStatusSection
@@ -57,6 +67,123 @@ struct SessionDetailView: View {
                 }
             }
         }
+    }
+    
+    // MARK: - Checklist Progress Banner
+    private var checklistProgressBanner: some View {
+        let completedCount = session.checklistItems.filter { $0.isCollected }.count
+        let totalCount = session.checklistItems.count
+        let progress = totalCount > 0 ? Double(completedCount) / Double(totalCount) : 0.0
+        
+        return HStack(spacing: 12) {
+            // Progress circle
+            ZStack {
+                Circle()
+                    .stroke(Color.gray.opacity(0.3), lineWidth: 6)
+                    .frame(width: 50, height: 50)
+                
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(completedCount == totalCount ? Color.green : Color.blue, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .frame(width: 50, height: 50)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 0.5), value: progress)
+                
+                Text("\(completedCount)")
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundColor(completedCount == totalCount ? .green : .blue)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Items Collected")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                
+                Text("\(completedCount) of \(totalCount) items checked")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                if completedCount == totalCount && totalCount > 0 {
+                    Text("🎉 All items collected!")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.green)
+                }
+            }
+            
+            Spacer()
+        }
+        .padding()
+        .background(completedCount == totalCount && totalCount > 0 ? Color.green.opacity(0.1) : Color.blue.opacity(0.05))
+        .cornerRadius(16)
+    }
+    
+    // MARK: - Quick Actions Section
+    private var quickActionsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Quick Actions")
+                .font(.headline)
+                .fontWeight(.semibold)
+            
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
+                Button(action: markAllCollected) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.green)
+                        
+                        Text("Mark All\nCollected")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(12)
+                }
+                
+                Button(action: clearAllItems) {
+                    VStack(spacing: 8) {
+                        Image(systemName: "arrow.counterclockwise.circle")
+                            .font(.title2)
+                            .foregroundColor(.orange)
+                        
+                        Text("Reset All\nItems")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(12)
+                }
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(16)
+    }
+    
+    // MARK: - Completion Celebration
+    private var completionCelebration: some View {
+        VStack(spacing: 8) {
+            Text("🎉 Excellent!")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.green)
+            
+            Text("You've collected all your items!")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color.green.opacity(0.1))
+        .cornerRadius(12)
     }
     
     // MARK: - Session Header
@@ -148,19 +275,54 @@ struct SessionDetailView: View {
     
     // MARK: - Checklist Section
     private var checklistSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Checklist Items")
-                .font(.headline)
-                .fontWeight(.semibold)
-            
-            LazyVStack(spacing: 8) {
-                ForEach(session.checklistItems) { item in
-                    ChecklistItemRow(item: item)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Your Items")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    Text("Tap to check off collected items")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
+                
+                Spacer()
+                
+                // Completion indicator
+                let completedCount = session.checklistItems.filter { $0.isCollected }.count
+                let totalCount = session.checklistItems.count
+                
+                HStack(spacing: 4) {
+                    Text("\(completedCount)/\(totalCount)")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundColor(completedCount == totalCount ? .green : .blue)
+                    
+                    Image(systemName: completedCount == totalCount ? "checkmark.circle.fill" : "circle.dashed")
+                        .foregroundColor(completedCount == totalCount ? .green : .blue)
+                        .font(.title2)
+                }
+            }
+            
+            // Enhanced checklist items
+            LazyVStack(spacing: 12) {
+                ForEach(session.checklistItems) { item in
+                    EnhancedChecklistItemRow(item: item)
+                }
+            }
+            
+            // Show completion celebration
+            if session.checklistItems.allSatisfy({ $0.isCollected }) && !session.checklistItems.isEmpty {
+                completionCelebration
             }
         }
         .padding()
-        .background(Color.gray.opacity(0.1))
+        .background(Color.blue.opacity(0.05))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.blue.opacity(0.3), lineWidth: 2)
+        )
         .cornerRadius(16)
     }
     
@@ -357,6 +519,30 @@ struct SessionDetailView: View {
         dismiss()
     }
     
+    private func markAllCollected() {
+        withAnimation(.easeInOut(duration: 0.5)) {
+            for item in session.checklistItems {
+                item.isCollected = true
+            }
+        }
+        
+        // Haptic feedback for success
+        let successFeedback = UINotificationFeedbackGenerator()
+        successFeedback.notificationOccurred(.success)
+    }
+    
+    private func clearAllItems() {
+        withAnimation(.easeInOut(duration: 0.5)) {
+            for item in session.checklistItems {
+                item.isCollected = false
+            }
+        }
+        
+        // Haptic feedback for reset
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+    }
+    
     private func formatDuration(_ duration: TimeInterval) -> String {
         let hours = Int(duration) / 3600
         let minutes = Int(duration) % 3600 / 60
@@ -466,6 +652,104 @@ struct ChecklistItemRow: View {
     private func toggleItem() {
         withAnimation {
             item.isCollected.toggle()
+        }
+    }
+}
+
+// MARK: - Enhanced Checklist Item Row
+struct EnhancedChecklistItemRow: View {
+    let item: ChecklistItem
+    @Environment(\.modelContext) private var modelContext
+    @State private var showingCollectedAnimation = false
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Item icon with visual enhancement
+            ZStack {
+                Circle()
+                    .fill(item.isCollected ? Color.green.opacity(0.2) : Color.blue.opacity(0.1))
+                    .frame(width: 44, height: 44)
+                
+                Image(systemName: item.icon)
+                    .foregroundColor(item.isCollected ? .green : .blue)
+                    .font(.title3)
+                    .scaleEffect(showingCollectedAnimation ? 1.2 : 1.0)
+                    .animation(.easeInOut(duration: 0.3), value: showingCollectedAnimation)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .font(.headline)
+                    .strikethrough(item.isCollected)
+                    .foregroundColor(item.isCollected ? .secondary : .primary)
+                
+                if item.isCollected {
+                    Text("✓ Collected")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.green)
+                } else {
+                    Text("Tap to check off")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            // Large, prominent check button
+            Button(action: toggleItem) {
+                ZStack {
+                    Circle()
+                        .fill(item.isCollected ? Color.green : Color.gray.opacity(0.3))
+                        .frame(width: 40, height: 40)
+                        .scaleEffect(showingCollectedAnimation ? 1.1 : 1.0)
+                        .animation(.easeInOut(duration: 0.3), value: showingCollectedAnimation)
+                    
+                    Image(systemName: item.isCollected ? "checkmark" : "plus")
+                        .foregroundColor(item.isCollected ? .white : .gray)
+                        .font(.title3)
+                        .fontWeight(.bold)
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(item.isCollected ? Color.green.opacity(0.05) : Color.white)
+                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(item.isCollected ? Color.green.opacity(0.3) : Color.gray.opacity(0.2), lineWidth: 1)
+        )
+        .onChange(of: item.isCollected) { _, newValue in
+            if newValue {
+                showCollectedAnimation()
+            }
+        }
+    }
+    
+    private func toggleItem() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            item.isCollected.toggle()
+        }
+        
+        // Haptic feedback
+        if item.isCollected {
+            let successFeedback = UINotificationFeedbackGenerator()
+            successFeedback.notificationOccurred(.success)
+        } else {
+            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+            impactFeedback.impactOccurred()
+        }
+    }
+    
+    private func showCollectedAnimation() {
+        showingCollectedAnimation = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            showingCollectedAnimation = false
         }
     }
 }

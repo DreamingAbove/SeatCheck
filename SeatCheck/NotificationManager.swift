@@ -22,10 +22,16 @@ class NotificationManager: ObservableObject {
         let center = UNUserNotificationCenter.current()
         
         do {
-            // Request all necessary permissions including critical alerts
-            let granted = try await center.requestAuthorization(
-                options: [.alert, .sound, .badge, .provisional, .criticalAlert]
-            )
+            // Request full notification permissions (removed .provisional to avoid "Deliver Quietly")
+            // Try critical alerts first, fallback to standard permissions if not entitled
+            var options: UNAuthorizationOptions = [.alert, .sound, .badge]
+            
+            // Add critical alerts if available (requires special entitlement from Apple)
+            if #available(iOS 12.0, *) {
+                options.insert(.criticalAlert)
+            }
+            
+            let granted = try await center.requestAuthorization(options: options)
             
             await MainActor.run {
                 self.isAuthorized = granted
@@ -54,13 +60,45 @@ class NotificationManager: ObservableObject {
         await MainActor.run {
                 self.authorizationStatus = settings.authorizationStatus
                 self.isAuthorized = settings.authorizationStatus == .authorized
+            
+            // Log detailed settings for debugging "Deliver Quietly" issues
             print("🔔 Notification status: \(settings.authorizationStatus.rawValue), authorized: \(self.isAuthorized)")
+            print("🔔 Alert setting: \(settings.alertSetting.rawValue)")
+            print("🔔 Sound setting: \(settings.soundSetting.rawValue)")
+            print("🔔 Badge setting: \(settings.badgeSetting.rawValue)")
+            print("🔔 Notification center setting: \(settings.notificationCenterSetting.rawValue)")
+            print("🔔 Lock screen setting: \(settings.lockScreenSetting.rawValue)")
+            if #available(iOS 15.0, *) {
+                print("🔔 Scheduled delivery setting: \(settings.scheduledDeliverySetting.rawValue)")
+            }
         }
     }
     
     func refreshNotificationStatus() async {
         print("🔄 Refreshing notification status...")
         await checkAuthorizationStatus()
+    }
+    
+    // MARK: - Delivery Mode Detection
+    func checkDeliveryMode() async -> NotificationDeliveryMode {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        
+        guard settings.authorizationStatus == .authorized else {
+            return .notAuthorized
+        }
+        
+        // Check if alerts, sounds, and lock screen are enabled
+        let hasAlerts = settings.alertSetting == .enabled
+        let hasSounds = settings.soundSetting == .enabled
+        let hasLockScreen = settings.lockScreenSetting == .enabled
+        
+        if hasAlerts && hasSounds && hasLockScreen {
+            return .full
+        } else if settings.notificationCenterSetting == .enabled {
+            return .quiet
+        } else {
+            return .disabled
+        }
     }
     
     // MARK: - Notification Categories Setup
@@ -684,6 +722,13 @@ enum StreakAchievementType: String, CaseIterable {
     case streakExtended = "streak_extended"
     case milestone = "milestone"
     case record = "record"
+}
+
+enum NotificationDeliveryMode {
+    case notAuthorized
+    case disabled
+    case quiet      // Deliver quietly (notification center only)
+    case full       // Full notifications (alerts, sounds, lock screen)
 }
 
 // MARK: - Notification Names
