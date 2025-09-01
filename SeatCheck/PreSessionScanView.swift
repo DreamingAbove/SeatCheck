@@ -124,7 +124,7 @@ struct PreSessionScanView: View {
                 }
             }
             .sheet(isPresented: $showingCamera) {
-                CameraScanView { capturedItem in
+                ScanModeSelectionView { capturedItem in
                     scannedItems.append(capturedItem)
                     lastAddedItem = capturedItem
                     // Automatically dismiss camera and return to inventory screen

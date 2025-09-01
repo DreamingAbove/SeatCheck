@@ -49,6 +49,28 @@ class RealityKitOverlayManager: ObservableObject {
     
     private init() {}
     
+    // MARK: - Safe Publishing Helper
+    private func safePublish(_ keyPath: WritableKeyPath<RealityKitOverlayManager, [AROverlay]>, value: [AROverlay]) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.activeOverlays = value
+        }
+    }
+    
+    private func safePublish(_ keyPath: WritableKeyPath<RealityKitOverlayManager, Bool>, value: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.celebrationActive = value
+        }
+    }
+    
+    private func safePublish(_ keyPath: WritableKeyPath<RealityKitOverlayManager, [AROverlay]>, update: @escaping ([AROverlay]) -> [AROverlay]) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.activeOverlays = update(self.activeOverlays)
+        }
+    }
+    
     // MARK: - Setup
     func setupWithARView(_ arView: ARView) {
         self.arView = arView
@@ -91,7 +113,13 @@ class RealityKitOverlayManager: ObservableObject {
         // Store and add to scene
         overlayEntities[overlay.id] = entity
         overlayAnchor.addChild(entity)
-        activeOverlays.append(overlay)
+        
+        // Safe publish update
+        safePublish(\.activeOverlays) { current in
+            var updated = current
+            updated.append(overlay)
+            return updated
+        }
         
         print("✅ Added scan guide overlay at position: \(position)")
     }
@@ -127,7 +155,6 @@ class RealityKitOverlayManager: ObservableObject {
         )
         
         // Create seat outline
-        
         let outlineMesh = MeshResource.generateBox(
             width: extent.x + 0.1, // Slightly larger for visibility
             height: 0.01,
@@ -146,7 +173,13 @@ class RealityKitOverlayManager: ObservableObject {
         
         overlayEntities[overlay.id] = entity
         overlayAnchor.addChild(entity)
-        activeOverlays.append(overlay)
+        
+        // Safe publish update
+        safePublish(\.activeOverlays) { current in
+            var updated = current
+            updated.append(overlay)
+            return updated
+        }
         
         print("✅ Added seat highlight for plane: \(plane.identifier)")
     }
@@ -175,7 +208,13 @@ class RealityKitOverlayManager: ObservableObject {
         
         overlayEntities[overlay.id] = entity
         overlayAnchor.addChild(entity)
-        activeOverlays.append(overlay)
+        
+        // Safe publish update
+        safePublish(\.activeOverlays) { current in
+            var updated = current
+            updated.append(overlay)
+            return updated
+        }
         
         // Auto-remove after animation
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
@@ -210,13 +249,20 @@ class RealityKitOverlayManager: ObservableObject {
         
         overlayEntities[overlay.id] = entity
         overlayAnchor.addChild(entity)
-        activeOverlays.append(overlay)
+        
+        // Safe publish update
+        safePublish(\.activeOverlays) { current in
+            var updated = current
+            updated.append(overlay)
+            return updated
+        }
         
         print("✅ Added warning indicator at position: \(position)")
     }
     
     func showScanCompletion() {
-        celebrationActive = true
+        // Safe publish update
+        safePublish(\.celebrationActive, value: true)
         
         // Add celebration effects across detected planes
         for overlay in activeOverlays where overlay.type == .seatHighlight {
@@ -227,7 +273,7 @@ class RealityKitOverlayManager: ObservableObject {
         
         // Auto-hide celebration
         DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
-            self.celebrationActive = false
+            self.safePublish(\.celebrationActive, value: false)
         }
         
         print("🎉 Showing scan completion celebration")
@@ -241,8 +287,10 @@ class RealityKitOverlayManager: ObservableObject {
         entity.removeFromParent()
         overlayEntities.removeValue(forKey: id)
         
-        // Remove from active overlays
-        activeOverlays.removeAll { $0.id == id }
+        // Safe publish update
+        safePublish(\.activeOverlays) { current in
+            current.filter { $0.id != id }
+        }
         
         print("✅ Removed overlay: \(id)")
     }
@@ -253,8 +301,10 @@ class RealityKitOverlayManager: ObservableObject {
         }
         
         overlayEntities.removeAll()
-        activeOverlays.removeAll()
         animationSubscriptions.removeAll()
+        
+        // Safe publish update
+        safePublish(\.activeOverlays, value: [])
         
         print("✅ Cleared all overlays")
     }

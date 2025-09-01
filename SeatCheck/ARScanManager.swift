@@ -34,6 +34,40 @@ class ARScanManager: NSObject, ObservableObject {
     private var lastFrameTime: Date = Date()
     private var frameCount: Int = 0
     
+    // MARK: - Safe Publishing Helper
+    private func safePublish<T>(_ keyPath: WritableKeyPath<ARScanManager, T>, value: T) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            switch keyPath {
+            case \.isARSessionRunning:
+                self.isARSessionRunning = value as! Bool
+            case \.sessionState:
+                self.sessionState = value as! ARSessionState
+            case \.scanCoverage:
+                self.scanCoverage = value as! Float
+            case \.scanProgress:
+                self.scanProgress = value as! Float
+            case \.hasDetectedSeat:
+                self.hasDetectedSeat = value as! Bool
+            case \.scanningGuidance:
+                self.scanningGuidance = value as! String
+            case \.detectedPlanes:
+                self.detectedPlanes = value as! [ARPlaneAnchor]
+            case \.detectedSurfaces:
+                self.detectedSurfaces = value as! [DetectedSurface]
+            default:
+                break
+            }
+        }
+    }
+    
+    private func safePublish(_ keyPath: WritableKeyPath<ARScanManager, [DetectedSurface]>, update: @escaping ([DetectedSurface]) -> [DetectedSurface]) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.detectedSurfaces = update(self.detectedSurfaces)
+        }
+    }
+    
     private override init() {
         super.init()
         setupARConfiguration()
@@ -251,31 +285,33 @@ class ARScanManager: NSObject, ObservableObject {
     }
     
     private func updateScanningGuidance() {
-        DispatchQueue.main.async {
-            if self.scanCoverage < 0.2 {
-                self.scanningGuidance = "Move your device slowly to scan the area"
-            } else if self.scanCoverage < 0.5 {
-                self.scanningGuidance = "Keep scanning - looking for surfaces"
-            } else if !self.hasDetectedSeat {
-                self.scanningGuidance = "Point camera at seat surfaces"
-            } else if self.scanCoverage < self.minimumScanCoverage {
-                self.scanningGuidance = "Scan around the seat area"
-            } else {
-                self.scanningGuidance = "Scan complete! Check for forgotten items"
-            }
+        let newGuidance: String
+        if scanCoverage < 0.2 {
+            newGuidance = "Move your device slowly to scan the area"
+        } else if scanCoverage < 0.5 {
+            newGuidance = "Keep scanning - looking for surfaces"
+        } else if !hasDetectedSeat {
+            newGuidance = "Point camera at seat surfaces"
+        } else if scanCoverage < minimumScanCoverage {
+            newGuidance = "Scan around the seat area"
+        } else {
+            newGuidance = "Scan complete! Check for forgotten items"
         }
+        
+        safePublish(\.scanningGuidance, value: newGuidance)
     }
     
     private func resetScanningState() {
-        detectedPlanes.removeAll()
-        detectedSurfaces.removeAll()
+        safePublish(\.detectedPlanes, value: [])
+        safePublish(\.detectedSurfaces, value: [])
+        safePublish(\.scanProgress, value: 0.0)
+        safePublish(\.scanCoverage, value: 0.0)
+        safePublish(\.hasDetectedSeat, value: false)
+        safePublish(\.scanningGuidance, value: "Move your device to scan the area")
+        
         scannedAreas.removeAll()
-        scanProgress = 0.0
-        scanCoverage = 0.0
-        hasDetectedSeat = false
         scanStartTime = nil
         frameCount = 0
-        scanningGuidance = "Move your device to scan the area"
     }
     
     // MARK: - Public Methods

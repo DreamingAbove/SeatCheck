@@ -238,7 +238,10 @@ struct ContentView: View {
                     Text("This will start a 30-minute ride session with default checklist items.")
                 }
             .sheet(isPresented: $showingCameraScan) {
-                CameraScanView()
+                ScanModeSelectionView { scannedItem in
+                    // Handle scanned item
+                    print("Item scanned: \(scannedItem.title)")
+                }
             }
             .sheet(isPresented: $showingChecklistSettings) {
                 ChecklistSettingsView()

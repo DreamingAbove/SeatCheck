@@ -57,17 +57,14 @@ enum CameraLens: String, CaseIterable, Identifiable {
     }
 }
 
-// MARK: - Enhanced Camera Scan View with AR
+// MARK: - Dedicated Camera Scan View
 struct CameraScanView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var cameraManager = CameraManager()
-    @StateObject private var arManager = ARScanManager.shared
     @State private var showingSettingsAlert = false
     @State private var showingItemNaming = false
     @State private var capturedImage: UIImage?
     @State private var itemTitle = ""
-    @State private var arModeEnabled = true
-    @State private var showingARResults = false
     
     // Optional callback for pre-session scanning
     var onItemCaptured: ((ScannedItem) -> Void)?
@@ -80,33 +77,9 @@ struct CameraScanView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                // Background layer - AR or regular camera
-                if arModeEnabled && ARWorldTrackingConfiguration.isSupported {
-                    // AR Camera View
-                    ARCameraView(arManager: arManager)
-                        .ignoresSafeArea()
-                } else {
-                    // Fallback to regular camera
-                    CameraPreviewView(cameraManager: cameraManager)
-                        .ignoresSafeArea()
-                }
-                
-                // AR Overlay (only when AR is enabled)
-                if arModeEnabled && ARWorldTrackingConfiguration.isSupported {
-                    ARScanOverlayView(arManager: arManager)
-                    
-                    // RealityKit overlay controls
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            RealityKitOverlayControls(overlayManager: arManager.getOverlayManager())
-                                .frame(maxWidth: 200)
-                        }
-                        .padding(.trailing)
-                        .padding(.bottom, 120) // Above bottom controls
-                    }
-                }
+                // Camera Preview
+                CameraPreviewView(cameraManager: cameraManager)
+                    .ignoresSafeArea()
                 
                 // Main UI Overlay
                 VStack {
@@ -121,7 +94,7 @@ struct CameraScanView: View {
             }
             .navigationBarHidden(true)
             .onAppear {
-                setupScanningMode()
+                setupCameraMode()
             }
             .onDisappear {
                 cleanup()
@@ -156,75 +129,56 @@ struct CameraScanView: View {
     
     // MARK: - Top Bar View
     private var topBarView: some View {
-        HStack {
-            Button("Cancel") {
-                dismiss()
-            }
-            .foregroundColor(.white)
-            .padding()
-            
-            Spacer()
-            
-            VStack {
-                Text(arModeEnabled ? "AR Scan Mode" : "Camera Mode")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                
-                if arModeEnabled {
-                    // AR status indicator
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(arStatusColor)
-                            .frame(width: 8, height: 8)
+                    HStack {
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                        .foregroundColor(.white)
+                        .padding()
                         
-                        Text(arStatusText)
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                } else {
-                    // Camera lens indicator
-                    if cameraManager.availableCameras.count > 1 {
-                        Text(cameraManager.selectedCamera.description)
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.8))
-                    }
+                        Spacer()
+                        
+            VStack {
+                Text("Camera Mode")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                
+                // Camera lens indicator
+                if cameraManager.availableCameras.count > 1 {
+                    Text(cameraManager.selectedCamera.description)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.8))
                 }
             }
-            .padding()
-            
-            Spacer()
-            
-            // Mode toggle button
-            Button(arModeEnabled ? "Camera" : "AR") {
-                toggleScanMode()
-            }
-            .foregroundColor(.white)
-            .padding()
-        }
+                            .padding()
+                        
+                        Spacer()
+                        
+            // Switch to AR button
+            Button("AR") {
+                // This will be handled by the parent view to switch modes
+                dismiss()
+                        }
+                        .foregroundColor(.white)
+                        .padding()
+                    }
         .background(Color.black.opacity(0.6))
     }
     
     // MARK: - Bottom Controls View
     private var bottomControlsView: some View {
         VStack(spacing: 20) {
-            // Mode-specific guidance
-            if arModeEnabled {
-                // AR guidance is handled by ARScanOverlayView
-                EmptyView()
-            } else {
-                // Regular camera guidance
-                Text("Point camera at your seat area to scan for items")
-                    .font(.subheadline)
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            }
+            // Camera guidance
+            Text("Point camera at your seat area to scan for items")
+                .font(.subheadline)
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
             
             // Control buttons
             HStack(spacing: 40) {
-                if !arModeEnabled {
-                    // Camera lens switching (only in camera mode)
-                    if cameraManager.availableCameras.count > 1 {
+                // Camera lens switching
+                if cameraManager.availableCameras.count > 1 {
                         Menu {
                             ForEach(cameraManager.availableCameras) { lens in
                                 Button {
@@ -251,26 +205,25 @@ struct CameraScanView: View {
                             .background(Color.white.opacity(0.2))
                             .cornerRadius(35)
                         }
-                    }
-                    
-                    // Flash toggle (only in camera mode)
-                    Button(action: {
-                        cameraManager.toggleFlash()
-                    }) {
-                        VStack {
-                            Image(systemName: cameraManager.isFlashOn ? "bolt.fill" : "bolt")
-                                .font(.title2)
-                            Text("Flash")
-                                .font(.caption)
-                        }
-                        .foregroundColor(.white)
-                        .frame(width: 70, height: 70)
-                        .background(Color.white.opacity(0.2))
-                        .cornerRadius(35)
-                    }
                 }
                 
-                // Capture button (works in both modes)
+                // Flash toggle
+                Button(action: {
+                    cameraManager.toggleFlash()
+                }) {
+                    VStack {
+                        Image(systemName: cameraManager.isFlashOn ? "bolt.fill" : "bolt")
+                            .font(.title2)
+                        Text("Flash")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.white)
+                    .frame(width: 70, height: 70)
+                    .background(Color.white.opacity(0.2))
+                    .cornerRadius(35)
+                }
+                
+                // Capture button
                 Button(action: capturePhoto) {
                     Circle()
                         .stroke(Color.white, lineWidth: 4)
@@ -285,126 +238,38 @@ struct CameraScanView: View {
                 .disabled(!canCapture)
                 .opacity(canCapture ? 1.0 : 0.5)
                 
-                if arModeEnabled {
-                    // AR-specific controls
-                    Button(action: {
-                        showingARResults = true
-                    }) {
-                        VStack {
-                            Image(systemName: "list.bullet.rectangle")
-                                .font(.title2)
-                            Text("Results")
-                                .font(.caption)
-                        }
-                        .foregroundColor(.white)
-                        .frame(width: 70, height: 70)
-                        .background(Color.blue.opacity(0.8))
-                        .cornerRadius(35)
-                    }
-                    .disabled(arManager.scanCoverage < 0.3)
-                }
+
             }
             .padding(.bottom, 30)
-        }
-        .sheet(isPresented: $showingARResults) {
-            ScanResultsView(scanResults: arManager.getScanResults())
         }
     }
     
     // MARK: - Computed Properties
     private var canCapture: Bool {
-        if arModeEnabled {
-            return arManager.canTakePhoto
-        } else {
-            return cameraManager.isSessionRunning
-        }
+        return cameraManager.isSessionRunning
     }
     
     private var captureButtonScale: CGFloat {
-        return (arModeEnabled ? arManager.isARSessionRunning : cameraManager.isCapturing) ? 0.8 : 1.0
-    }
-    
-    private var arStatusColor: Color {
-        switch arManager.sessionState {
-        case .running: return .green
-        case .paused, .interrupted: return .orange
-        case .failed: return .red
-        default: return .gray
-        }
-    }
-    
-    private var arStatusText: String {
-        switch arManager.sessionState {
-        case .running: return "Scanning"
-        case .paused: return "Paused"
-        case .interrupted: return "Interrupted"
-        case .failed: return "Failed"
-        default: return "Starting"
-        }
+        return cameraManager.isCapturing ? 0.8 : 1.0
     }
     
     // MARK: - Actions
-    private func setupScanningMode() {
-        if arModeEnabled && ARWorldTrackingConfiguration.isSupported {
-            // Start AR session
-            arManager.startARSession()
-        } else {
-            // Fallback to regular camera
-            arModeEnabled = false
-            cameraManager.checkPermissions()
-        }
-    }
-    
-    private func toggleScanMode() {
-        arModeEnabled.toggle()
-        
-        if arModeEnabled && ARWorldTrackingConfiguration.isSupported {
-            // Switch to AR mode
-            cameraManager.stopSession()
-            arManager.startARSession()
-        } else {
-            // Switch to camera mode
-            arModeEnabled = false
-            arManager.stopARSession()
-            cameraManager.checkPermissions()
-        }
+    private func setupCameraMode() {
+        cameraManager.checkPermissions()
     }
     
     private func capturePhoto() {
-        if arModeEnabled && arManager.isARSessionRunning {
-            // Capture AR frame
-            guard let arView = arManager.arView,
-                  let frame = arView.session.currentFrame else {
-                print("❌ No AR frame available")
-                return
-            }
-            
-            // Convert AR frame to UIImage
-            let image = UIImage(ciImage: CIImage(cvPixelBuffer: frame.capturedImage))
-            capturedImage = image
-            showingItemNaming = true
-            
-            // Add haptic feedback
-            let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-            impactFeedback.impactOccurred()
-            
-        } else if !arModeEnabled {
-            // Regular camera capture
-            cameraManager.capturePhoto { image in
-                DispatchQueue.main.async {
-                    self.capturedImage = image
-                    self.showingItemNaming = true
-                }
+        // Regular camera capture
+        cameraManager.capturePhoto { image in
+            DispatchQueue.main.async {
+                self.capturedImage = image
+                self.showingItemNaming = true
             }
         }
     }
     
     private func cleanup() {
-        if arModeEnabled {
-            arManager.stopARSession()
-        } else {
-            cameraManager.stopSession()
-        }
+        cameraManager.stopSession()
     }
     
     private func openSettings() {
@@ -435,7 +300,7 @@ struct ItemNamingSheet: View {
                             .aspectRatio(contentMode: .fit)
                             .frame(height: 200)
                             .cornerRadius(12)
-                            .overlay(
+                                .overlay(
                                 RoundedRectangle(cornerRadius: 12)
                                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                             )
@@ -466,7 +331,7 @@ struct ItemNamingSheet: View {
                     }
                     .foregroundColor(.red)
                     .frame(maxWidth: .infinity)
-                    .padding()
+                        .padding()
                     .background(Color.red.opacity(0.1))
                     .cornerRadius(12)
                     

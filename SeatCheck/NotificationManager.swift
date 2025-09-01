@@ -22,14 +22,15 @@ class NotificationManager: ObservableObject {
         let center = UNUserNotificationCenter.current()
         
         do {
-            // Request full notification permissions (removed .provisional to avoid "Deliver Quietly")
-            // Try critical alerts first, fallback to standard permissions if not entitled
-            var options: UNAuthorizationOptions = [.alert, .sound, .badge]
+            // Request standard notification permissions (avoid .provisional to prevent "Deliver Quietly")
+            // Only request critical alerts if we have the proper entitlement
+            let options: UNAuthorizationOptions = [.alert, .sound, .badge]
             
-            // Add critical alerts if available (requires special entitlement from Apple)
-            if #available(iOS 12.0, *) {
-                options.insert(.criticalAlert)
-            }
+            // Note: Critical alerts require special entitlement from Apple
+            // For now, use standard permissions to avoid "Deliver Quietly" mode
+            // if #available(iOS 12.0, *) {
+            //     options.insert(.criticalAlert)
+            // }
             
             let granted = try await center.requestAuthorization(options: options)
             
@@ -220,8 +221,8 @@ class NotificationManager: ObservableObject {
         content.subtitle = "Your \(session.displayName) session has ended"
         content.body = "⚠️ Don't forget to retrieve your items from the checklist before leaving! Tap to scan your seat or mark items as collected."
         
-        // Use critical alert sound for maximum attention
-        content.sound = UNNotificationSound.defaultCritical
+        // Use standard notification sound (critical alerts require special entitlement)
+        content.sound = .default
         content.badge = 1
         content.categoryIdentifier = "SESSION_EXPIRED"
         
@@ -679,9 +680,9 @@ class NotificationManager: ObservableObject {
     func testCriticalNotification() {
         Task {
             let content = UNMutableNotificationContent()
-            content.title = "🧪 Test Critical Alert"
-            content.body = "This is a test of the critical alert system with sound."
-            content.sound = UNNotificationSound.defaultCritical
+            content.title = "🧪 Test Notification"
+            content.body = "This is a test of the notification system with sound."
+            content.sound = .default
             content.badge = 1
             
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
