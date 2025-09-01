@@ -7,6 +7,12 @@ struct CameraScanView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var cameraManager = CameraManager()
     @State private var showingSettingsAlert = false
+    @State private var showingItemNaming = false
+    @State private var capturedImage: UIImage?
+    @State private var itemTitle = ""
+    
+    // Optional callback for pre-session scanning
+    var onItemCaptured: ((ScannedItem) -> Void)?
     
     var body: some View {
         NavigationView {
@@ -27,7 +33,7 @@ struct CameraScanView: View {
                         
                         Spacer()
                         
-                        Text("Scan Your Seat")
+                        Text("Check Your Area")
                             .font(.headline)
                             .foregroundColor(.white)
                             .padding()
@@ -55,7 +61,14 @@ struct CameraScanView: View {
                         .cornerRadius(25)
                         
                         // Capture Button
-                        Button(action: cameraManager.capturePhoto) {
+                        Button(action: {
+                            cameraManager.capturePhoto { image in
+                                if let image = image {
+                                    capturedImage = image
+                                    showingItemNaming = true
+                                }
+                            }
+                        }) {
                             Circle()
                                 .fill(Color.white)
                                 .frame(width: 70, height: 70)
@@ -148,6 +161,7 @@ class CameraManager: NSObject, ObservableObject {
     @Published var isFlashOn = false
     @Published var capturedImage: UIImage?
     @Published var showingPermissionAlert = false
+    private var photoCompletion: ((UIImage?) -> Void)?
     
     private var captureSession: AVCaptureSession?
     private var videoOutput: AVCapturePhotoOutput?
@@ -341,9 +355,10 @@ class CameraManager: NSObject, ObservableObject {
         }
     }
     
-    func capturePhoto() {
+    func capturePhoto(completion: ((UIImage?) -> Void)? = nil) {
         guard let videoOutput = videoOutput else { 
             print("Video output not available")
+            completion?(nil)
             return 
         }
         
@@ -351,6 +366,9 @@ class CameraManager: NSObject, ObservableObject {
         if let camera = currentCamera, camera.hasFlash {
             settings.flashMode = isFlashOn ? .on : .off
         }
+        
+        // Store completion handler
+        self.photoCompletion = completion
         
         videoOutput.capturePhoto(with: settings, delegate: self)
         print("Photo capture initiated")
@@ -386,6 +404,10 @@ extension CameraManager: AVCapturePhotoCaptureDelegate {
         Task { @MainActor in
             capturedImage = image
             print("Photo captured successfully")
+            
+            // Call completion handler if provided
+            photoCompletion?(image)
+            photoCompletion = nil
             
             // Here you could add Vision framework processing for item detection
             // processImageForItems(image)

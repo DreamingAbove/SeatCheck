@@ -44,38 +44,76 @@ struct ChecklistSettingsView: View {
                 
                 // Default Items Section
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Common Items")
+                    Text("Your Default Items")
                         .font(.headline)
                         .padding(.horizontal, 20)
                     
-                    ScrollView {
-                        LazyVStack(spacing: 8) {
-                            ForEach(currentSettings.defaultChecklistItems) { item in
-                                DefaultChecklistItemRow(item: item) {
-                                    deleteItem(item)
+                    if currentSettings.defaultChecklistItems.isEmpty {
+                        // Empty state
+                        VStack(spacing: 16) {
+                            Image(systemName: "checklist")
+                                .font(.system(size: 40))
+                                .foregroundColor(.gray)
+                            
+                            Text("No Default Items Set")
+                                .font(.title3)
+                                .fontWeight(.medium)
+                            
+                            Text("Add items here to automatically include them in new sessions")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .padding(.horizontal, 20)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 8) {
+                                ForEach(currentSettings.defaultChecklistItems) { item in
+                                    DefaultChecklistItemRow(item: item) {
+                                        deleteItem(item)
+                                    }
                                 }
                             }
+                            .padding(.horizontal, 20)
                         }
-                        .padding(.horizontal, 20)
                     }
                 }
                 .frame(maxHeight: .infinity)
                 
-                // Add Item Button
-                Button(action: {
-                    showingAddItem = true
-                }) {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title2)
-                        Text("Add Custom Item")
-                            .font(.headline)
+                // Action Buttons
+                VStack(spacing: 12) {
+                    Button(action: {
+                        showingAddItem = true
+                    }) {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title2)
+                            Text("Add Custom Item")
+                                .font(.headline)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
+                    
+                    Button(action: {
+                        addCommonItems()
+                    }) {
+                        HStack {
+                            Image(systemName: "plus.circle")
+                                .font(.title2)
+                            Text("Add Common Items")
+                                .font(.headline)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.orange)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
@@ -116,6 +154,22 @@ struct ChecklistSettingsView: View {
         withAnimation {
             currentSettings.defaultChecklistItems.removeAll { $0.id == item.id }
             modelContext.delete(item)
+        }
+    }
+    
+    private func addCommonItems() {
+        // Add common items as suggestions
+        let commonItems = [
+            ChecklistItem(title: "Phone", icon: "iphone"),
+            ChecklistItem(title: "Wallet", icon: "creditcard"),
+            ChecklistItem(title: "Keys", icon: "key"),
+            ChecklistItem(title: "Bag", icon: "bag"),
+            ChecklistItem(title: "Charger", icon: "cable.connector")
+        ]
+        
+        for item in commonItems {
+            currentSettings.defaultChecklistItems.append(item)
+            modelContext.insert(item)
         }
     }
 }

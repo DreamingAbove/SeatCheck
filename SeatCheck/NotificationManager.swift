@@ -82,7 +82,7 @@ class NotificationManager: ObservableObject {
         
         let scanAction = UNNotificationAction(
             identifier: "OPEN_SCAN",
-            title: "📷 Scan Seat",
+            title: "🔍 Check Area",
             options: [.foreground]
         )
         
@@ -116,7 +116,7 @@ class NotificationManager: ObservableObject {
         // Smart Detection Category
         let checkSeatAction = UNNotificationAction(
             identifier: "CHECK_SEAT_NOW",
-            title: "🔍 Check Seat",
+            title: "🔍 Check Area",
             options: [.foreground]
         )
         
@@ -194,7 +194,8 @@ class NotificationManager: ObservableObject {
             "type": "session_expired",
             "timestamp": Date().timeIntervalSince1970,
             "checklistCount": session.checklistItems.count,
-            "collectedCount": session.checklistItems.filter { $0.isCollected }.count
+            "collectedCount": session.checklistItems.filter { $0.isCollected }.count,
+            "sessionName": session.displayName
         ]
         
         // Immediate delivery with small delay to ensure sound plays
@@ -275,7 +276,8 @@ class NotificationManager: ObservableObject {
         content.userInfo = [
             "sessionId": session.id.uuidString,
             "preset": session.displayName,
-            "type": "session_snooze"
+            "type": "session_snooze",
+            "sessionName": session.displayName
         ]
         
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: snoozeDuration, repeats: false)
@@ -315,7 +317,8 @@ class NotificationManager: ObservableObject {
         content.userInfo = [
             "sessionId": session.id.uuidString,
             "preset": session.displayName,
-            "type": "session_reminder"
+            "type": "session_reminder",
+            "sessionName": session.displayName
         ]
         
         let request = UNNotificationRequest(
@@ -365,7 +368,8 @@ class NotificationManager: ObservableObject {
             "sessionId": session.id.uuidString,
             "preset": session.displayName,
             "detectionType": detectionType.rawValue,
-            "type": "smart_detection"
+            "type": "smart_detection",
+            "sessionName": session.displayName
         ]
         
         let request = UNNotificationRequest(
@@ -457,6 +461,9 @@ class NotificationManager: ObservableObject {
                 handleViewStats(userInfo)
             case "SHARE_ACHIEVEMENT":
                 handleShareAchievement(userInfo)
+        case UNNotificationDefaultActionIdentifier:
+                // User tapped the notification banner itself
+                handleNotificationBannerTap(userInfo)
         default:
                 print("❓ Unknown action identifier: \(actionIdentifier)")
             }
@@ -558,6 +565,46 @@ class NotificationManager: ObservableObject {
         }
     }
     
+    // MARK: - Banner Tap Handler
+    private func handleNotificationBannerTap(_ userInfo: [AnyHashable: Any]) {
+        if let notificationType = userInfo["type"] as? String {
+            switch notificationType {
+            case "session_expired", "session_reminder", "session_snooze":
+                // Open to specific session detail
+                if let sessionId = userInfo["sessionId"] as? String,
+                   let sessionUUID = UUID(uuidString: sessionId) {
+                    NotificationCenter.default.post(
+                        name: .openSessionDetail,
+                        object: nil,
+                        userInfo: ["sessionId": sessionUUID]
+                    )
+                    print("📱 Opening session detail for session: \(sessionId)")
+                }
+                
+            case "smart_detection":
+                // Open to specific session that triggered detection
+                if let sessionId = userInfo["sessionId"] as? String,
+                   let sessionUUID = UUID(uuidString: sessionId) {
+                    NotificationCenter.default.post(
+                        name: .openSessionDetail,
+                        object: nil,
+                        userInfo: ["sessionId": sessionUUID]
+                    )
+                    print("📱 Opening session detail for smart detection: \(sessionId)")
+                }
+                
+            case "streak_achievement":
+                // Open to stats view
+                NotificationCenter.default.post(name: .openStatsView, object: nil)
+                print("📊 Opening stats view for achievement")
+                
+            default:
+                // Default to main screen
+                print("📱 Opening main screen for notification type: \(notificationType)")
+            }
+        }
+    }
+    
     // MARK: - Utility Methods
     private func formatTimeRemaining(_ timeInterval: TimeInterval) -> String {
         let minutes = Int(timeInterval) / 60
@@ -649,4 +696,6 @@ extension Notification.Name {
     static let checkSeatNow = Notification.Name("checkSeatNow")
     static let viewStats = Notification.Name("viewStats")
     static let shareAchievement = Notification.Name("shareAchievement")
+    static let openSessionDetail = Notification.Name("openSessionDetail")
+    static let openStatsView = Notification.Name("openStatsView")
 }

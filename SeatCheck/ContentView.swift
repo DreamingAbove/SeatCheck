@@ -22,6 +22,10 @@ struct ContentView: View {
     @State private var showingNotificationSettings = false
     @State private var showingQuickStartConfirmation = false
     @State private var showingTemplateSelection = false
+    @State private var showingSessionDetail = false
+    @State private var selectedSessionId: UUID?
+    @State private var showingPreSessionScan = false
+    @State private var preScannedItems: [ScannedItem] = []
     @State private var selectedPreset: SessionPreset = .ride
     @State private var selectedDuration: TimeInterval = 1800 // 30 minutes
     @StateObject private var liveActivityManager = LiveActivityManager.shared
@@ -91,6 +95,22 @@ struct ContentView: View {
                             .cornerRadius(12)
                         }
                         
+                        Button(action: {
+                            showingPreSessionScan = true
+                        }) {
+                            HStack {
+                                Image(systemName: "camera.viewfinder")
+                                    .font(.title2)
+                                Text("Create Inventory")
+                                    .font(.headline)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                        
 
                         
                         Button(action: {
@@ -99,7 +119,7 @@ struct ContentView: View {
                             HStack {
                                 Image(systemName: "camera.fill")
                                     .font(.title2)
-                                Text("Scan Seat")
+                                Text("Check Area")
                                     .font(.headline)
                             }
                             .frame(maxWidth: .infinity)
@@ -193,6 +213,20 @@ struct ContentView: View {
                         startSessionFromTemplate(template)
                     }
                 }
+                .sheet(isPresented: $showingSessionDetail) {
+                    if let sessionId = selectedSessionId,
+                       let session = sessions.first(where: { $0.id == sessionId }) {
+                        SessionDetailView(session: session)
+                    }
+                }
+                .sheet(isPresented: $showingPreSessionScan) {
+                    PreSessionScanView { scannedItems in
+                        // After scanning, show custom session builder with scanned items
+                        showingCustomSession = true
+                        // Pass scanned items to custom session builder
+                        preScannedItems = scannedItems
+                    }
+                }
                 .alert("Start Quick Ride Session?", isPresented: $showingQuickStartConfirmation) {
                     Button("Cancel", role: .cancel) { }
                     Button("Start") {
@@ -243,11 +277,8 @@ struct ContentView: View {
                 modelContext.insert(currentSettings)
             }
             
-            // Add default checklist items
-            let itemsToAdd = currentSettings.defaultChecklistItems.isEmpty ? 
-                ChecklistItem.defaultItems : currentSettings.defaultChecklistItems
-            
-            for item in itemsToAdd {
+            // Add user's default checklist items
+            for item in currentSettings.defaultChecklistItems {
                 let newItem = ChecklistItem(title: item.title, icon: item.icon)
                 newItem.session = newSession
                 newSession.checklistItems.append(newItem)
@@ -279,15 +310,12 @@ struct ContentView: View {
                 modelContext.insert(currentSettings)
             }
             
-            // Add custom checklist items from settings, or fall back to defaults
-            let itemsToAdd = currentSettings.defaultChecklistItems.isEmpty ? 
-                ChecklistItem.defaultItems : currentSettings.defaultChecklistItems
-            
-            for item in itemsToAdd {
+            // Add user's default checklist items
+            for item in currentSettings.defaultChecklistItems {
                 let newItem = ChecklistItem(title: item.title, icon: item.icon)
                 newItem.session = newSession
                 newSession.checklistItems.append(newItem)
-            modelContext.insert(newItem)
+                modelContext.insert(newItem)
             }
             
             modelContext.insert(newSession)
@@ -460,6 +488,26 @@ struct ContentView: View {
                 self.handleShareAchievement(streakCount: streakCount)
             }
         }
+        
+        // Handle open session detail action
+        NotificationCenter.default.addObserver(
+            forName: .openSessionDetail,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let sessionId = notification.userInfo?["sessionId"] as? UUID {
+                self.handleOpenSessionDetail(sessionId: sessionId)
+            }
+        }
+        
+        // Handle open stats view action
+        NotificationCenter.default.addObserver(
+            forName: .openStatsView,
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.handleOpenStatsView()
+        }
     }
     
     private func handleMarkAllCollected(sessionId: UUID) {
@@ -545,6 +593,19 @@ struct ContentView: View {
         
         // In a real app, you would use UIActivityViewController here
         print("Sharing achievement: \(shareText)")
+    }
+    
+    private func handleOpenSessionDetail(sessionId: UUID) {
+        // Open session detail view for the specific session
+        selectedSessionId = sessionId
+        showingSessionDetail = true
+        print("Opening session detail for session: \(sessionId)")
+    }
+    
+    private func handleOpenStatsView() {
+        // Open stats/history view
+        showingSessionHistory = true
+        print("Opening stats view")
     }
 }
 
@@ -1145,7 +1206,7 @@ struct CustomSessionBuilderView: View {
     }
     
     private func loadDefaultItems() {
-        // Load default items from settings or use system defaults
+        // Load default items from settings
         let currentSettings: Settings
         if let existing = settings.first {
             currentSettings = existing
@@ -1154,10 +1215,8 @@ struct CustomSessionBuilderView: View {
             modelContext.insert(currentSettings)
         }
         
-        let defaultItems = currentSettings.defaultChecklistItems.isEmpty ? 
-            ChecklistItem.defaultItems : currentSettings.defaultChecklistItems
-        
-        customChecklistItems = defaultItems.map { item in
+        // Use user's default items if they have any set
+        customChecklistItems = currentSettings.defaultChecklistItems.map { item in
             ChecklistItem(title: item.title, icon: item.icon)
         }
     }

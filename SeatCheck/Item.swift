@@ -222,3 +222,19 @@ extension ChecklistItem {
         ChecklistItem(title: "Charger", icon: "cable.connector")
     ]
 }
+
+// MARK: - Scanned Item Model
+struct ScannedItem: Identifiable, Codable {
+    var id = UUID()
+    let title: String
+    let icon: String
+    let timestamp: Date
+    let imageData: Data? // Optional: store captured image
+    
+    init(title: String, icon: String = "checkmark.circle", imageData: Data? = nil) {
+        self.title = title
+        self.icon = icon
+        self.timestamp = Date()
+        self.imageData = imageData
+    }
+}

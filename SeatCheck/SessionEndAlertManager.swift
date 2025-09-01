@@ -231,7 +231,7 @@ struct SessionEndAlertView: View {
                         }) {
                             HStack {
                                 Image(systemName: "camera.fill")
-                                Text("Scan Seat")
+                                Text("Check Area")
                             }
                             .font(.headline)
                             .frame(maxWidth: .infinity)
