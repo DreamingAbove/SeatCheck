@@ -103,34 +103,34 @@ struct SeatCheckApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if onboardingManager.shouldShowOnboarding {
-                OnboardingView()
-                    .environmentObject(notificationManager)
-                    .environmentObject(errorHandler)
-                    .onDisappear {
-                        onboardingManager.markOnboardingComplete()
-                    }
-            } else {
-                ContentView()
-                    .environmentObject(notificationManager)
-                    .environmentObject(errorHandler)
-                    .onAppear {
-                        setupNotifications()
-                    }
-                    .errorAlert()
-            }
+                                    if onboardingManager.shouldShowOnboarding {
+                            OnboardingView()
+                                .environmentObject(errorHandler)
+                                .onDisappear {
+                                    onboardingManager.markOnboardingComplete()
+                                }
+                        } else {
+                            ContentView()
+                                .environmentObject(errorHandler)
+                                .onAppear {
+                                    setupNotifications()
+                                }
+                                .errorAlert()
+                        }
         }
         .modelContainer(sharedModelContainer)
     }
     
     private func setupNotifications() {
-        // Set up notification categories and actions
-        notificationManager.setupNotificationCategories()
-        
         // Set up notification delegate
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared
         
-        // Request notification permissions
+        // Refresh notification status on app launch
+        Task {
+            await notificationManager.refreshNotificationStatus()
+        }
+        
+        // Request notification permissions (will handle setup automatically)
         Task {
             await notificationManager.requestAuthorization()
         }
@@ -164,17 +164,12 @@ class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, Observab
         let actionIdentifier = response.actionIdentifier
         let userInfo = response.notification.request.content.userInfo
         
-        if let sessionId = userInfo["sessionId"] as? String,
-           let preset = userInfo["preset"] as? String {
-            
-            // Dispatch to main actor to handle the notification action
-            Task { @MainActor in
-                NotificationManager.shared.handleNotificationAction(
-                    actionIdentifier,
-                    sessionId: sessionId,
-                    preset: preset
-                )
-            }
+        // Dispatch to main actor to handle the notification action
+        Task { @MainActor in
+            NotificationManager.shared.handleNotificationAction(
+                actionIdentifier,
+                userInfo: userInfo
+            )
         }
         
         completionHandler()

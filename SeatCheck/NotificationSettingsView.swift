@@ -4,7 +4,7 @@ import UserNotifications
 // MARK: - Notification Settings View
 struct NotificationSettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var enhancedNotificationManager = EnhancedNotificationManager.shared
+    @StateObject private var notificationManager = NotificationManager.shared
     @State private var showingPermissionAlert = false
     
     var body: some View {
@@ -13,25 +13,25 @@ struct NotificationSettingsView: View {
                 // Authorization Status
                 Section {
                     HStack {
-                        Image(systemName: enhancedNotificationManager.isAuthorized ? "bell.fill" : "bell.slash")
-                            .foregroundColor(enhancedNotificationManager.isAuthorized ? .green : .red)
+                                        Image(systemName: notificationManager.isAuthorized ? "bell.fill" : "bell.slash")
+                    .foregroundColor(notificationManager.isAuthorized ? .green : .red)
                             .font(.title2)
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Notification Permissions")
                                 .font(.headline)
                             
-                            Text(enhancedNotificationManager.isAuthorized ? "Notifications enabled" : "Notifications disabled")
+                            Text(notificationManager.isAuthorized ? "Notifications enabled" : "Notifications disabled")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                         
                         Spacer()
                         
-                        if !enhancedNotificationManager.isAuthorized {
+                        if !notificationManager.isAuthorized {
                             Button("Enable") {
                                 Task {
-                                    await enhancedNotificationManager.requestAuthorization()
+                                    let _ = await notificationManager.requestAuthorization()
                                 }
                             }
                             .buttonStyle(.borderedProminent)
@@ -49,28 +49,28 @@ struct NotificationSettingsView: View {
                         title: "Session Expired",
                         subtitle: "When your session ends",
                         icon: "timer",
-                        isEnabled: $enhancedNotificationManager.notificationSettings.enableSessionExpired
+                        isEnabled: $notificationManager.notificationSettings.enableSessionExpired
                     )
                     
                     NotificationTypeRow(
                         title: "Smart Detection",
                         subtitle: "Location, motion, and Bluetooth alerts",
                         icon: "brain.head.profile",
-                        isEnabled: $enhancedNotificationManager.notificationSettings.enableSmartDetection
+                        isEnabled: $notificationManager.notificationSettings.enableSmartDetection
                     )
                     
                     NotificationTypeRow(
                         title: "Streak Achievements",
                         subtitle: "Celebrate your progress",
                         icon: "flame",
-                        isEnabled: $enhancedNotificationManager.notificationSettings.enableStreakAchievements
+                        isEnabled: $notificationManager.notificationSettings.enableStreakAchievements
                     )
                     
                     NotificationTypeRow(
                         title: "Snooze Reminders",
                         subtitle: "Follow-up reminders",
                         icon: "clock.arrow.circlepath",
-                        isEnabled: $enhancedNotificationManager.notificationSettings.enableSnooze
+                        isEnabled: $notificationManager.notificationSettings.enableSnooze
                     )
                 } header: {
                     Text("Notification Types")
@@ -84,14 +84,14 @@ struct NotificationSettingsView: View {
                         title: "Sound",
                         subtitle: "Play notification sounds",
                         icon: "speaker.wave.2",
-                        isEnabled: $enhancedNotificationManager.notificationSettings.soundEnabled
+                        isEnabled: $notificationManager.notificationSettings.soundEnabled
                     )
                     
                     NotificationTypeRow(
                         title: "Badge",
                         subtitle: "Show app badge count",
                         icon: "number.circle",
-                        isEnabled: $enhancedNotificationManager.notificationSettings.badgeEnabled
+                        isEnabled: $notificationManager.notificationSettings.badgeEnabled
                     )
                 } header: {
                     Text("Preferences")
@@ -110,7 +110,7 @@ struct NotificationSettingsView: View {
                             Spacer()
                         }
                     }
-                    .disabled(!enhancedNotificationManager.isAuthorized)
+                                            .disabled(!notificationManager.isAuthorized)
                 } header: {
                     Text("Testing")
                 } footer: {
@@ -161,14 +161,14 @@ struct NotificationSettingsView: View {
     }
     
     private func testNotification() {
-        guard enhancedNotificationManager.isAuthorized else {
+        guard notificationManager.isAuthorized else {
             showingPermissionAlert = true
             return
         }
         
         // Create a test session for notification
         let testSession = Session(preset: .ride, plannedDuration: 1800)
-        enhancedNotificationManager.sendEnhancedSessionExpiredNotification(for: testSession)
+        notificationManager.sendSessionExpiredNotification(for: testSession)
         
         print("Test notification sent")
     }

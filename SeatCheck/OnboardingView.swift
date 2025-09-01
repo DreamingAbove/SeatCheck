@@ -450,19 +450,18 @@ struct OnboardingView: View {
     private func requestNotificationPermission() {
         Task {
             print("🔔 Requesting notification permission...")
-            let granted = await notificationManager.requestAuthorization()
-            print("🔔 Notification permission result: \(granted)")
+            let _ = await notificationManager.requestAuthorization()
             
             await MainActor.run {
-                notificationPermissionGranted = granted
-                if granted {
+                notificationPermissionGranted = notificationManager.isAuthorized
+                if notificationManager.isAuthorized {
                     // Success - show feedback
                     print("✅ Notification permission granted")
-                    successAlertMessage = "Notifications enabled! You'll now receive reminders about your belongings."
+                    successAlertMessage = "Notifications enabled! You'll now receive session reminders, smart alerts, and achievement notifications."
                     showingSuccessAlert = true
                 } else {
                     // Show alert to guide user to settings
-                    permissionAlertMessage = "Notifications help you stay on top of your belongings. You can enable them later in Settings."
+                    permissionAlertMessage = "Notifications help you stay on top of your belongings with session reminders and smart alerts. You can enable them later in Settings."
                     showingPermissionAlert = true
                 }
             }
@@ -520,18 +519,19 @@ struct OnboardingView: View {
     }
     
     private func completeOnboarding() {
+        // Ensure notification categories are set up
+        Task {
+            await notificationManager.setupNotificationCategories()
+        }
+        
         // Mark onboarding as complete using the manager
         OnboardingManager.shared.markOnboardingComplete()
         dismiss()
     }
     
     private func checkCurrentPermissionStatus() {
-        // Check notification permission
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async {
-                self.notificationPermissionGranted = settings.authorizationStatus == .authorized
-            }
-        }
+        // Check notification permission using enhanced manager
+        notificationPermissionGranted = notificationManager.isAuthorized
         
         // Check location permission
         let locationStatus = sensorManager.getLocationAuthorizationStatus()

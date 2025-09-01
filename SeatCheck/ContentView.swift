@@ -27,7 +27,7 @@ struct ContentView: View {
     @StateObject private var liveActivityManager = LiveActivityManager.shared
     @StateObject private var timerManager = TimerManager.shared
     @StateObject private var sensorManager = SensorManager.shared
-    @EnvironmentObject private var notificationManager: NotificationManager
+    @StateObject private var notificationManager = NotificationManager.shared
 
     var body: some View {
         NavigationStack {
@@ -276,7 +276,7 @@ struct ContentView: View {
         }
     }
     
-        private func startNewSession() {
+    private func startNewSession() {
         withAnimation {
             let newSession = Session(preset: selectedPreset, plannedDuration: selectedDuration)
             
@@ -297,7 +297,7 @@ struct ContentView: View {
                 let newItem = ChecklistItem(title: item.title, icon: item.icon)
                 newItem.session = newSession
                 newSession.checklistItems.append(newItem)
-                modelContext.insert(newItem)
+            modelContext.insert(newItem)
             }
             
             modelContext.insert(newSession)
@@ -345,7 +345,7 @@ struct ContentView: View {
                 let newItem = ChecklistItem(title: item.title, icon: item.icon)
                 newItem.session = newSession
                 newSession.checklistItems.append(newItem)
-                modelContext.insert(newItem)
+            modelContext.insert(newItem)
             }
             
             modelContext.insert(newSession)
@@ -475,23 +475,23 @@ struct ContentView: View {
     private func handleMarkAllCollected(sessionId: UUID) {
         guard let session = sessions.first(where: { $0.id == sessionId }) else { return }
         
-        withAnimation {
-            for item in session.checklistItems {
-                item.isCollected = true
+            withAnimation {
+                for item in session.checklistItems {
+                    item.isCollected = true
+                }
             }
-        }
         
         // Dismiss any active session end alert
         SessionEndAlertManager.shared.dismissSessionEndAlert()
         
-        print("All items marked as collected for session: \(sessionId)")
+            print("All items marked as collected for session: \(sessionId)")
     }
     
     private func handleSnoozeSession(sessionId: UUID) {
         guard let session = sessions.first(where: { $0.id == sessionId }) else { return }
         
         // Send snooze notification
-        notificationManager.sendSnoozeNotification(for: session)
+            notificationManager.sendSnoozeNotification(for: session)
         
         // Dismiss any active session end alert
         SessionEndAlertManager.shared.dismissSessionEndAlert()
@@ -503,7 +503,7 @@ struct ContentView: View {
         guard let session = sessions.first(where: { $0.id == sessionId }) else { return }
         
         // End the session
-        timerManager.completeSession(session, endSignal: .manual)
+            timerManager.completeSession(session, endSignal: .manual)
         
         // Dismiss any active session end alert
         SessionEndAlertManager.shared.dismissSessionEndAlert()
@@ -524,8 +524,8 @@ struct ContentView: View {
     private func handleExtendSession(sessionId: UUID) {
         guard let session = sessions.first(where: { $0.id == sessionId }) else { return }
         
-        // Extend session by 15 minutes
-        session.plannedDuration += 900 // 15 minutes
+            // Extend session by 15 minutes
+            session.plannedDuration += 900 // 15 minutes
         
         // Dismiss any active session end alert
         SessionEndAlertManager.shared.dismissSessionEndAlert()
@@ -666,7 +666,7 @@ struct RecentSessionRow: View {
                 .frame(width: 30)
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.preset.rawValue)
+                Text(session.displayName)
                     .font(.subheadline)
                     .fontWeight(.medium)
                 

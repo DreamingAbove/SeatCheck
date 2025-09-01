@@ -174,17 +174,24 @@ struct SessionEndAlertView: View {
                                 .fontWeight(.semibold)
                             
                             ForEach(session.checklistItems) { item in
-                                HStack {
-                                    Image(systemName: item.isCollected ? "checkmark.circle.fill" : "circle")
-                                        .foregroundColor(item.isCollected ? .green : .red)
-                                    
-                                    Text(item.title)
-                                        .strikethrough(item.isCollected)
-                                        .foregroundColor(item.isCollected ? .secondary : .primary)
-                                    
-                                    Spacer()
+                                Button(action: {
+                                    withAnimation {
+                                        item.isCollected.toggle()
+                                    }
+                                }) {
+                                    HStack {
+                                        Image(systemName: item.isCollected ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(item.isCollected ? .green : .red)
+                                        
+                                        Text(item.title)
+                                            .strikethrough(item.isCollected)
+                                            .foregroundColor(item.isCollected ? .secondary : .primary)
+                                        
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal)
                                 }
-                                .padding(.horizontal)
+                                .buttonStyle(PlainButtonStyle())
                             }
                         }
                         .padding()

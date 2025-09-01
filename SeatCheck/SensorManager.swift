@@ -391,7 +391,7 @@ extension SensorManager: CLLocationManagerDelegate {
             print("Exited geofence - ending session")
             
             // Send smart detection notification
-            EnhancedNotificationManager.shared.sendSmartDetectionNotification(for: session, detectionType: .location)
+            NotificationManager.shared.sendSmartDetectionNotification(for: session, detectionType: .location)
             
             TimerManager.shared.completeSession(session, endSignal: .location)
         }

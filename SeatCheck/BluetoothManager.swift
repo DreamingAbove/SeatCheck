@@ -81,7 +81,7 @@ class BluetoothManager: NSObject, ObservableObject {
         print("Device disconnection timeout: \(device.name ?? "Unknown") - Ending session")
         
         // Send smart detection notification
-        EnhancedNotificationManager.shared.sendSmartDetectionNotification(for: session, detectionType: .bluetooth)
+        NotificationManager.shared.sendSmartDetectionNotification(for: session, detectionType: .bluetooth)
         
         TimerManager.shared.completeSession(session, endSignal: .bluetooth)
     }

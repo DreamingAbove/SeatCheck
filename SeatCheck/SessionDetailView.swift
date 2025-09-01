@@ -15,7 +15,7 @@ struct SessionDetailView: View {
     @StateObject private var liveActivityManager = LiveActivityManager.shared
     @StateObject private var sensorManager = SensorManager.shared
     @StateObject private var bluetoothManager = BluetoothManager.shared
-    @EnvironmentObject private var notificationManager: NotificationManager
+    @StateObject private var notificationManager = NotificationManager.shared
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -223,6 +223,10 @@ struct SessionDetailView: View {
                     Button("Test Alarm") {
                         SessionEndAlertManager.shared.showSessionEndAlert(for: session)
                     }
+                    
+                                            Button("Test Notification") {
+                            NotificationManager.shared.sendSessionExpiredNotification(for: session)
+                        }
                     .font(.caption)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
