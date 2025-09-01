@@ -23,6 +23,7 @@
 	<array>
 		<string>armv7</string>
 		<string>location-services</string>
+		<string>arkit</string>
 	</array>
 	
 	<!-- Supported Interface Orientations -->
@@ -51,7 +52,7 @@
 	<string>SeatCheck uses motion data to detect when you're moving and help determine if you've left your seat.</string>
 	
 	<key>NSCameraUsageDescription</key>
-	<string>SeatCheck needs camera access to help you scan your seat area for forgotten items.</string>
+	<string>SeatCheck needs camera access to help you scan your seat area for forgotten items using advanced camera features and augmented reality.</string>
 	
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>SeatCheck uses Bluetooth to detect when your connected devices disconnect, helping to remind you to check your belongings.</string>
