@@ -19,7 +19,8 @@ struct SeatCheckApp: App {
         let schema = Schema([
             Session.self,
             ChecklistItem.self,
-            Settings.self
+            Settings.self,
+            Template.self
         ])
         
         // First, try to create the Application Support directory if it doesn't exist

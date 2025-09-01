@@ -12,6 +12,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var sessions: [Session]
     @Query private var settings: [Settings]
+    @Query private var templates: [Template]
     
     @State private var showingNewSession = false
     @State private var showingCustomSession = false
@@ -20,6 +21,7 @@ struct ContentView: View {
     @State private var showingSessionHistory = false
     @State private var showingNotificationSettings = false
     @State private var showingQuickStartConfirmation = false
+    @State private var showingTemplateSelection = false
     @State private var selectedPreset: SessionPreset = .ride
     @State private var selectedDuration: TimeInterval = 1800 // 30 minutes
     @StateObject private var liveActivityManager = LiveActivityManager.shared
@@ -87,6 +89,24 @@ struct ContentView: View {
                             .background(Color.gray.opacity(0.2))
                             .foregroundColor(.primary)
                             .cornerRadius(12)
+                        }
+                        
+                        if !templates.isEmpty {
+                            Button(action: {
+                                showingTemplateSelection = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.title2)
+                                    Text("Templates")
+                                        .font(.headline)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.orange.opacity(0.2))
+                                .foregroundColor(.primary)
+                                .cornerRadius(12)
+                            }
                         }
                         
                         Button(action: {
@@ -176,6 +196,11 @@ struct ContentView: View {
                 .sheet(isPresented: $showingCustomSession) {
                     CustomSessionBuilderView { preset, duration, items, name in
                         startCustomSession(preset: preset, duration: duration, customItems: items, sessionName: name)
+                    }
+                }
+                .sheet(isPresented: $showingTemplateSelection) {
+                    TemplateSelectionView { template in
+                        startSessionFromTemplate(template)
                     }
                 }
                 .alert("Start Quick Ride Session?", isPresented: $showingQuickStartConfirmation) {
@@ -293,6 +318,30 @@ struct ContentView: View {
             
             // Add custom checklist items
             for item in customItems {
+                let newItem = ChecklistItem(title: item.title, icon: item.icon)
+                newItem.session = newSession
+                newSession.checklistItems.append(newItem)
+                modelContext.insert(newItem)
+            }
+            
+            modelContext.insert(newSession)
+            
+            // Start Live Activity
+            Task {
+                await liveActivityManager.startLiveActivity(for: newSession)
+            }
+            
+            // Start Timer
+            timerManager.startTimer(for: newSession)
+        }
+    }
+    
+    private func startSessionFromTemplate(_ template: Template) {
+        withAnimation {
+            let newSession = Session(preset: template.preset, plannedDuration: template.duration, name: template.name)
+            
+            // Add template checklist items
+            for item in template.checklistItems {
                 let newItem = ChecklistItem(title: item.title, icon: item.icon)
                 newItem.session = newSession
                 newSession.checklistItems.append(newItem)
@@ -1094,9 +1143,31 @@ struct CustomSessionBuilderView: View {
     }
     
     private func saveTemplate() {
-        // TODO: Implement template saving
-        // This would save the current configuration as a template
-        print("Saving template: \(templateName)")
+        // Create checklist items for the template
+        let templateItems = customChecklistItems.map { item in
+            ChecklistItem(title: item.title, icon: item.icon)
+        }
+        
+        // Create and save the template
+        let template = Template(
+            name: templateName,
+            preset: selectedPreset,
+            duration: totalDuration,
+            checklistItems: templateItems
+        )
+        
+        // Insert template items into model context
+        for item in templateItems {
+            modelContext.insert(item)
+        }
+        
+        // Insert template into model context
+        modelContext.insert(template)
+        
+        // Reset template name
+        templateName = ""
+        
+        print("Template saved: \(template.name)")
     }
     
     private func startCustomSession() {
@@ -1109,5 +1180,129 @@ struct CustomSessionBuilderView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Session.self, ChecklistItem.self, Settings.self], inMemory: true)
+        .modelContainer(for: [Session.self, ChecklistItem.self, Settings.self, Template.self], inMemory: true)
+}
+
+// MARK: - Template Selection View
+struct TemplateSelectionView: View {
+    let onSelect: (Template) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @Query private var templates: [Template]
+    
+    var body: some View {
+        NavigationStack {
+            VStack {
+                if templates.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray)
+                        
+                        Text("No Templates")
+                            .font(.title2)
+                            .fontWeight(.medium)
+                        
+                        Text("Create a custom session and save it as a template to see it here")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(templates.sorted(by: { $0.updatedAt > $1.updatedAt })) { template in
+                            TemplateRow(template: template) {
+                                onSelect(template)
+                                dismiss()
+                            }
+                        }
+                        .onDelete(perform: deleteTemplates)
+                    }
+                    .listStyle(PlainListStyle())
+                }
+            }
+            .navigationTitle("Templates")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func deleteTemplates(offsets: IndexSet) {
+        withAnimation {
+            for index in offsets {
+                let template = templates.sorted(by: { $0.updatedAt > $1.updatedAt })[index]
+                
+                // Delete template items
+                for item in template.checklistItems {
+                    modelContext.delete(item)
+                }
+                
+                // Delete template
+                modelContext.delete(template)
+            }
+        }
+    }
+}
+
+// MARK: - Template Row
+struct TemplateRow: View {
+    let template: Template
+    let onSelect: () -> Void
+    
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 12) {
+                // Template icon
+                Image(systemName: template.preset.icon)
+                    .font(.title2)
+                    .foregroundColor(.blue)
+                    .frame(width: 40)
+                
+                // Template details
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(template.name)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    
+                    HStack {
+                        Text(template.preset.rawValue)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("•")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text(template.formattedDuration)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("•")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Text("\(template.checklistItems.count) items")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Spacer()
+                
+                // Select button
+                Image(systemName: "play.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.blue)
+            }
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
 }

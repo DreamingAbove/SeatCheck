@@ -91,6 +91,43 @@ final class Settings {
     }
 }
 
+// MARK: - Template Model
+@Model
+final class Template {
+    var id: UUID
+    var name: String
+    var preset: SessionPreset
+    var duration: TimeInterval
+    var checklistItems: [ChecklistItem]
+    var createdAt: Date
+    var updatedAt: Date
+    
+    init(name: String, preset: SessionPreset, duration: TimeInterval, checklistItems: [ChecklistItem]) {
+        self.id = UUID()
+        self.name = name
+        self.preset = preset
+        self.duration = duration
+        self.checklistItems = checklistItems
+        self.createdAt = Date()
+        self.updatedAt = Date()
+    }
+    
+    var displayName: String {
+        return name
+    }
+    
+    var formattedDuration: String {
+        let hours = Int(duration) / 3600
+        let minutes = Int(duration) % 3600 / 60
+        
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else {
+            return "\(minutes)m"
+        }
+    }
+}
+
 // MARK: - Enums
 enum SessionPreset: String, CaseIterable, Codable {
     case ride = "Ride"
