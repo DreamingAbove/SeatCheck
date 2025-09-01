@@ -148,19 +148,21 @@ class EnhancedNotificationManager: ObservableObject {
         }
         
         let content = UNMutableNotificationContent()
-        content.title = "⏰ Time to Check Your Seat!"
-        content.subtitle = "Your \(session.preset.rawValue) session has ended"
-        content.body = "Don't forget to check for your belongings before leaving. Tap to scan your seat or mark items as collected."
-        content.sound = .default
+        content.title = "🚨 ALARM: Check Your Belongings!"
+        content.subtitle = "Your \(session.displayName) session has ended"
+        content.body = "⚠️ Don't forget to retrieve your items from the checklist before leaving! Tap to scan your seat or mark items as collected."
+        content.sound = UNNotificationSound.defaultCritical // Use critical sound for alarm
         content.badge = 1
         content.categoryIdentifier = "SESSION_EXPIRED"
         
         // Add rich content
         content.userInfo = [
             "sessionId": session.id.uuidString,
-            "preset": session.preset.rawValue,
+            "preset": session.displayName,
             "type": "session_expired",
-            "timestamp": Date().timeIntervalSince1970
+            "timestamp": Date().timeIntervalSince1970,
+            "checklistCount": session.checklistItems.count,
+            "collectedCount": session.checklistItems.filter { $0.isCollected }.count
         ]
         
         // Add attachment if available (future enhancement)
@@ -179,6 +181,46 @@ class EnhancedNotificationManager: ObservableObject {
                 print("Failed to schedule enhanced session expired notification: \(error)")
             } else {
                 print("Enhanced session expired notification scheduled for session: \(session.id)")
+            }
+        }
+        
+        // Send additional reminder notification after 30 seconds if user hasn't responded
+        sendFollowUpReminderNotification(for: session, delay: 30)
+    }
+    
+    // MARK: - Follow-up Reminder Notification
+    private func sendFollowUpReminderNotification(for session: Session, delay: TimeInterval) {
+        let content = UNMutableNotificationContent()
+        content.title = "⚠️ Still Need to Check Your Seat?"
+        content.subtitle = "Don't leave your belongings behind!"
+        content.body = "Your \(session.displayName) session ended. Please check your checklist items: \(session.checklistItems.filter { !$0.isCollected }.count) items still need to be collected."
+        content.sound = .default
+        content.badge = 1
+        content.categoryIdentifier = "SESSION_EXPIRED"
+        
+        content.userInfo = [
+            "sessionId": session.id.uuidString,
+            "preset": session.displayName,
+            "type": "session_reminder_followup",
+            "timestamp": Date().timeIntervalSince1970
+        ]
+        
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: delay,
+            repeats: false
+        )
+        
+        let request = UNNotificationRequest(
+            identifier: "session_reminder_followup_\(session.id.uuidString)",
+            content: content,
+            trigger: trigger
+        )
+        
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Failed to schedule follow-up reminder notification: \(error)")
+            } else {
+                print("Follow-up reminder notification scheduled for session: \(session.id)")
             }
         }
     }

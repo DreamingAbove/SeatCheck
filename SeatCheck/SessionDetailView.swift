@@ -220,8 +220,8 @@ struct SessionDetailView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     
-                    Button("Test Notification") {
-                        notificationManager.sendSessionExpiredNotification(for: session)
+                    Button("Test Alarm") {
+                        SessionEndAlertManager.shared.showSessionEndAlert(for: session)
                     }
                     .font(.caption)
                     .padding(.horizontal, 12)

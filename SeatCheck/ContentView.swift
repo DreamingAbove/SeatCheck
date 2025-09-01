@@ -205,6 +205,9 @@ struct ContentView: View {
                 // Set up notification action handlers
                 setupNotificationHandlers()
             }
+            .overlay {
+                SessionEndAlertView()
+            }
         }
     }
     
@@ -421,48 +424,74 @@ struct ContentView: View {
     }
     
     private func handleMarkAllCollected(sessionId: UUID) {
-        if let session = sessions.first(where: { $0.id == sessionId }) {
-            withAnimation {
-                for item in session.checklistItems {
-                    item.isCollected = true
-                }
+        guard let session = sessions.first(where: { $0.id == sessionId }) else { return }
+        
+        withAnimation {
+            for item in session.checklistItems {
+                item.isCollected = true
             }
-            print("All items marked as collected for session: \(sessionId)")
         }
+        
+        // Dismiss any active session end alert
+        SessionEndAlertManager.shared.dismissSessionEndAlert()
+        
+        print("All items marked as collected for session: \(sessionId)")
     }
     
     private func handleSnoozeSession(sessionId: UUID) {
-        if let session = sessions.first(where: { $0.id == sessionId }) {
-            notificationManager.sendSnoozeNotification(for: session)
-            print("Snooze notification sent for session: \(sessionId)")
-        }
+        guard let session = sessions.first(where: { $0.id == sessionId }) else { return }
+        
+        // Send snooze notification
+        notificationManager.sendSnoozeNotification(for: session)
+        
+        // Dismiss any active session end alert
+        SessionEndAlertManager.shared.dismissSessionEndAlert()
+        
+        print("Snooze requested for session: \(sessionId)")
     }
     
     private func handleEndSessionNow(sessionId: UUID) {
-        if let session = sessions.first(where: { $0.id == sessionId }) {
-            timerManager.completeSession(session, endSignal: .manual)
-            print("Session ended immediately: \(sessionId)")
-        }
+        guard let session = sessions.first(where: { $0.id == sessionId }) else { return }
+        
+        // End the session
+        timerManager.completeSession(session, endSignal: .manual)
+        
+        // Dismiss any active session end alert
+        SessionEndAlertManager.shared.dismissSessionEndAlert()
+        
+        print("Session ended manually for session: \(sessionId)")
     }
     
     private func handleOpenScan(sessionId: UUID) {
         // Show camera scan view
         showingCameraScan = true
-        print("Opening camera scan for session: \(sessionId)")
+        
+        // Dismiss any active session end alert
+        SessionEndAlertManager.shared.dismissSessionEndAlert()
+        
+        print("Open scan requested for session: \(sessionId)")
     }
     
     private func handleExtendSession(sessionId: UUID) {
-        if let session = sessions.first(where: { $0.id == sessionId }) {
-            // Extend session by 15 minutes
-            session.plannedDuration += 900 // 15 minutes
-            print("Session extended by 15 minutes: \(sessionId)")
-        }
+        guard let session = sessions.first(where: { $0.id == sessionId }) else { return }
+        
+        // Extend session by 15 minutes
+        session.plannedDuration += 900 // 15 minutes
+        
+        // Dismiss any active session end alert
+        SessionEndAlertManager.shared.dismissSessionEndAlert()
+        
+        print("Session extended for session: \(sessionId)")
     }
     
     private func handleCheckSeat(sessionId: UUID) {
-        // Show camera scan view for seat checking
+        // Show camera scan view
         showingCameraScan = true
-        print("Opening camera scan for seat check: \(sessionId)")
+        
+        // Dismiss any active session end alert
+        SessionEndAlertManager.shared.dismissSessionEndAlert()
+        
+        print("Check seat requested for session: \(sessionId)")
     }
     
     private func handleViewStats() {
@@ -1071,17 +1100,6 @@ struct CustomSessionBuilderView: View {
     }
     
     private func startCustomSession() {
-        // Create session with custom duration
-        let newSession = Session(preset: selectedPreset, plannedDuration: totalDuration)
-        
-        // Add custom checklist items
-        for item in customChecklistItems {
-            let newItem = ChecklistItem(title: item.title, icon: item.icon)
-            newItem.session = newSession
-            newSession.checklistItems.append(newItem)
-            // Note: We don't insert into modelContext here as it's not a persistent item
-        }
-        
         // Call the onStart callback to handle session creation
         onStart(selectedPreset, totalDuration, customChecklistItems, sessionName)
     }

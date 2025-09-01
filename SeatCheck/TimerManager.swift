@@ -137,8 +137,11 @@ class TimerManager: ObservableObject {
         // Stop timer
         stopTimer()
         
-        // Send notification (will implement in Step 2.1)
+        // Send notification
         sendSessionExpiredNotification(for: session)
+        
+        // Show in-app alert
+        SessionEndAlertManager.shared.showSessionEndAlert(for: session)
         
         print("Session expired: \(session.id)")
     }
