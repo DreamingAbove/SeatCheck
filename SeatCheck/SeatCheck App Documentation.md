@@ -112,7 +112,7 @@ Enable these background modes in your Xcode project:
 ## 📋 Usage Guide
 
 ### Starting a Session
-1. **Quick Start**: Tap "Quick Start Ride" for a 30-minute ride session
+1. **Quick Start**: Tap "Quick Start" for a 30-minute ride session
 2. **Custom Session**: Tap "Custom Session" to choose preset and duration
 3. **Session begins**: Live Activity appears on Lock Screen
 4. **Smart monitoring**: Location, motion, and Bluetooth monitoring starts

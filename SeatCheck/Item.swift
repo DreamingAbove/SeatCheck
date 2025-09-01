@@ -129,30 +129,35 @@ final class Template {
 }
 
 // MARK: - Enums
-enum SessionPreset: String, CaseIterable, Codable {
+enum SessionPreset: String, Codable {
     case ride = "Ride"
-    case custom = "Custom"
     case cafe = "Café"
     case classroom = "Classroom"
     case flight = "Flight"
+    case custom = "Custom" // Keep for backward compatibility with existing data
+    
+    // Custom allCases that excludes the deprecated 'custom' case
+    static var allCases: [SessionPreset] {
+        return [.ride, .cafe, .classroom, .flight]
+    }
     
     var icon: String {
         switch self {
         case .ride: return "car.fill"
-        case .custom: return "slider.horizontal.3"
         case .cafe: return "cup.and.saucer.fill"
         case .classroom: return "building.2.fill"
         case .flight: return "airplane"
+        case .custom: return "slider.horizontal.3"
         }
     }
     
     var defaultDuration: TimeInterval {
         switch self {
         case .ride: return 1800 // 30 minutes
-        case .custom: return 900 // 15 minutes
         case .cafe: return 3600 // 1 hour
         case .classroom: return 5400 // 1.5 hours
         case .flight: return 7200 // 2 hours
+        case .custom: return 900 // 15 minutes
         }
     }
 }

@@ -65,7 +65,7 @@ struct ContentView: View {
                             HStack {
                                 Image(systemName: "car.fill")
                                     .font(.title2)
-                                Text("Quick Start Ride")
+                                Text("Quick Start")
                                     .font(.headline)
                             }
                             .frame(maxWidth: .infinity)
@@ -91,23 +91,7 @@ struct ContentView: View {
                             .cornerRadius(12)
                         }
                         
-                        if !templates.isEmpty {
-                            Button(action: {
-                                showingTemplateSelection = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "doc.on.doc")
-                                        .font(.title2)
-                                    Text("Templates")
-                                        .font(.headline)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.orange.opacity(0.2))
-                                .foregroundColor(.primary)
-                                .cornerRadius(12)
-                            }
-                        }
+
                         
                         Button(action: {
                             showingCameraScan = true
@@ -176,6 +160,12 @@ struct ContentView: View {
                         }
                         
                         Menu {
+                            if !templates.isEmpty {
+                                Button("Templates") {
+                                    showingTemplateSelection = true
+                                }
+                            }
+                            
                             Button("Reset Onboarding") {
                                 OnboardingManager.shared.resetOnboarding()
                             }
@@ -877,6 +867,30 @@ struct PresetButton: View {
                     .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 2)
             )
         }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+struct CompactPresetButton: View {
+    let preset: SessionPreset
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: preset.icon)
+                    .font(.system(size: 14, weight: .medium))
+                Text(preset.rawValue)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isSelected ? Color.blue : Color.gray.opacity(0.2))
+            .foregroundColor(isSelected ? .white : .primary)
+            .cornerRadius(20)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -888,7 +902,7 @@ struct CustomSessionBuilderView: View {
     @Query private var settings: [Settings]
     
     @State private var sessionName = ""
-    @State private var selectedPreset: SessionPreset = .custom
+    @State private var selectedPreset: SessionPreset = .ride
     @State private var customHours = 0
     @State private var customMinutes = 30
     @State private var customChecklistItems: [ChecklistItem] = []
@@ -905,13 +919,13 @@ struct CustomSessionBuilderView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 16) {
                     sessionNameSection
                     sessionTypeSection
                     durationSection
                     checklistSection
                     
-                    Spacer(minLength: 40)
+                    Spacer(minLength: 20)
                     
                     startButton
                 }
@@ -977,14 +991,17 @@ struct CustomSessionBuilderView: View {
             Text("Session Type")
                 .font(.headline)
             
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 2), spacing: 12) {
-                ForEach(SessionPreset.allCases, id: \.self) { preset in
-                    PresetButton(
-                        preset: preset,
-                        isSelected: selectedPreset == preset,
-                        action: { selectedPreset = preset }
-                    )
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(SessionPreset.allCases, id: \.self) { preset in
+                        CompactPresetButton(
+                            preset: preset,
+                            isSelected: selectedPreset == preset,
+                            action: { selectedPreset = preset }
+                        )
+                    }
                 }
+                .padding(.horizontal, 2)
             }
         }
     }
@@ -994,10 +1011,11 @@ struct CustomSessionBuilderView: View {
             Text("Duration")
                 .font(.headline)
             
-            HStack(spacing: 20) {
+            HStack(spacing: 16) {
                 hoursPicker
                 minutesPicker
             }
+            .frame(height: 120) // Constrain height to make it more compact
             
             Text("Total: \(formatDuration(totalDuration))")
                 .font(.subheadline)
@@ -1007,7 +1025,7 @@ struct CustomSessionBuilderView: View {
     }
     
     private var hoursPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             Text("Hours")
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -1018,12 +1036,13 @@ struct CustomSessionBuilderView: View {
                 }
             }
             .pickerStyle(WheelPickerStyle())
-            .frame(width: 80)
+            .frame(width: 80, height: 100)
+            .clipped()
         }
     }
     
     private var minutesPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             Text("Minutes")
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -1034,7 +1053,8 @@ struct CustomSessionBuilderView: View {
                 }
             }
             .pickerStyle(WheelPickerStyle())
-            .frame(width: 80)
+            .frame(width: 80, height: 100)
+            .clipped()
         }
     }
     

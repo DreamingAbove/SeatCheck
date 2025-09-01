@@ -52,8 +52,8 @@ class NotificationManager: ObservableObject {
     func checkAuthorizationStatus() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         await MainActor.run {
-            self.authorizationStatus = settings.authorizationStatus
-            self.isAuthorized = settings.authorizationStatus == .authorized
+                self.authorizationStatus = settings.authorizationStatus
+                self.isAuthorized = settings.authorizationStatus == .authorized
             print("🔔 Notification status: \(settings.authorizationStatus.rawValue), authorized: \(self.isAuthorized)")
         }
     }
@@ -438,14 +438,14 @@ class NotificationManager: ObservableObject {
     // MARK: - Notification Action Handling
     func handleNotificationAction(_ actionIdentifier: String, userInfo: [AnyHashable: Any]) {
         Task { @MainActor in
-            switch actionIdentifier {
-            case "MARK_ALL_COLLECTED":
+        switch actionIdentifier {
+        case "MARK_ALL_COLLECTED":
                 handleMarkAllCollected(userInfo)
-            case "SNOOZE_5_MIN":
+        case "SNOOZE_5_MIN":
                 handleSnooze(userInfo)
-            case "OPEN_SCAN":
+        case "OPEN_SCAN":
                 handleOpenScan(userInfo)
-            case "END_SESSION_NOW":
+        case "END_SESSION_NOW":
                 handleEndSessionNow(userInfo)
             case "EXTEND_15_MIN":
                 handleExtendSession(userInfo)
@@ -457,7 +457,7 @@ class NotificationManager: ObservableObject {
                 handleViewStats(userInfo)
             case "SHARE_ACHIEVEMENT":
                 handleShareAchievement(userInfo)
-            default:
+        default:
                 print("❓ Unknown action identifier: \(actionIdentifier)")
             }
         }
@@ -467,9 +467,9 @@ class NotificationManager: ObservableObject {
     private func handleMarkAllCollected(_ userInfo: [AnyHashable: Any]) {
         if let sessionId = userInfo["sessionId"] as? String,
            let sessionUUID = UUID(uuidString: sessionId) {
-            NotificationCenter.default.post(
-                name: .markAllItemsCollected,
-                object: nil,
+        NotificationCenter.default.post(
+            name: .markAllItemsCollected,
+            object: nil,
                 userInfo: ["sessionId": sessionUUID]
             )
             print("✅ Mark all collected action handled for session: \(sessionId)")
@@ -479,9 +479,9 @@ class NotificationManager: ObservableObject {
     private func handleSnooze(_ userInfo: [AnyHashable: Any]) {
         if let sessionId = userInfo["sessionId"] as? String,
            let sessionUUID = UUID(uuidString: sessionId) {
-            NotificationCenter.default.post(
-                name: .snoozeSession,
-                object: nil,
+        NotificationCenter.default.post(
+            name: .snoozeSession,
+            object: nil,
                 userInfo: ["sessionId": sessionUUID]
             )
             print("⏰ Snooze action handled for session: \(sessionId)")
@@ -491,9 +491,9 @@ class NotificationManager: ObservableObject {
     private func handleOpenScan(_ userInfo: [AnyHashable: Any]) {
         if let sessionId = userInfo["sessionId"] as? String,
            let sessionUUID = UUID(uuidString: sessionId) {
-            NotificationCenter.default.post(
-                name: .openScanView,
-                object: nil,
+        NotificationCenter.default.post(
+            name: .openScanView,
+            object: nil,
                 userInfo: ["sessionId": sessionUUID]
             )
             print("📷 Open scan action handled for session: \(sessionId)")
@@ -503,9 +503,9 @@ class NotificationManager: ObservableObject {
     private func handleEndSessionNow(_ userInfo: [AnyHashable: Any]) {
         if let sessionId = userInfo["sessionId"] as? String,
            let sessionUUID = UUID(uuidString: sessionId) {
-            NotificationCenter.default.post(
-                name: .endSessionNow,
-                object: nil,
+        NotificationCenter.default.post(
+            name: .endSessionNow,
+            object: nil,
                 userInfo: ["sessionId": sessionUUID]
             )
             print("⏹️ End session now action handled for session: \(sessionId)")
