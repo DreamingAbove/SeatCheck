@@ -39,6 +39,8 @@ class ARScanManager: NSObject, ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             switch keyPath {
+            case \.arView:
+                self.arView = value as? ARView
             case \.isARSessionRunning:
                 self.isARSessionRunning = value as! Bool
             case \.sessionState:
@@ -115,8 +117,8 @@ class ARScanManager: NSObject, ObservableObject {
         // Setup RealityKit overlays
         overlayManager.setupWithARView(arView!)
         
-        isARSessionRunning = true
-        sessionState = .running
+        safePublish(\.isARSessionRunning, value: true)
+        safePublish(\.sessionState, value: ARSessionState.running)
         scanStartTime = Date()
         
         print("✅ AR session started")
@@ -125,15 +127,15 @@ class ARScanManager: NSObject, ObservableObject {
     
     func pauseARSession() {
         arSession?.pause()
-        isARSessionRunning = false
-        sessionState = .paused
+        safePublish(\.isARSessionRunning, value: false)
+        safePublish(\.sessionState, value: ARSessionState.paused)
         print("⏸️ AR session paused")
     }
     
     func stopARSession() {
         arSession?.pause()
-        isARSessionRunning = false
-        sessionState = .stopped
+        safePublish(\.isARSessionRunning, value: false)
+        safePublish(\.sessionState, value: ARSessionState.stopped)
         
         // Clear RealityKit overlays
         overlayManager.clearAllOverlays()
@@ -169,8 +171,9 @@ class ARScanManager: NSObject, ObservableObject {
         }
         
         // Update scan coverage (simplified calculation)
-        scanCoverage = min(Float(planeArea / 2.0), 1.0) // Normalize to 0-1
-        scanProgress = scanCoverage
+        let newCoverage = min(Float(planeArea / 2.0), 1.0) // Normalize to 0-1
+        safePublish(\.scanCoverage, value: newCoverage)
+        safePublish(\.scanProgress, value: newCoverage)
         
         // Check if we've detected a seat-like surface
         checkForSeatSurfaces()
@@ -226,17 +229,13 @@ class ARScanManager: NSObject, ObservableObject {
                 )
                 
                 // Add or update surface
-                if let index = detectedSurfaces.firstIndex(where: { $0.id == surface.id }) {
-                    detectedSurfaces[index] = surface
-                } else {
-                    detectedSurfaces.append(surface)
-                }
+                self.addOrUpdateSurface(surface)
                 
                 foundSeat = true
             }
         }
         
-        hasDetectedSeat = foundSeat
+        safePublish(\.hasDetectedSeat, value: foundSeat)
     }
     
     private func calculateSeatConfidence(_ plane: ARPlaneAnchor) -> Float {
@@ -363,6 +362,45 @@ class ARScanManager: NSObject, ObservableObject {
     func getOverlayManager() -> RealityKitOverlayManager {
         return overlayManager
     }
+    
+    func setARView(_ arView: ARView) {
+        safePublish(\.arView, value: arView)
+    }
+    
+    private func addPlane(_ planeAnchor: ARPlaneAnchor) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.detectedPlanes.append(planeAnchor)
+        }
+    }
+    
+    private func updatePlane(_ planeAnchor: ARPlaneAnchor) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if let index = self.detectedPlanes.firstIndex(where: { $0.identifier == planeAnchor.identifier }) {
+                self.detectedPlanes[index] = planeAnchor
+            }
+        }
+    }
+    
+    private func removePlane(_ planeAnchor: ARPlaneAnchor) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.detectedPlanes.removeAll { $0.identifier == planeAnchor.identifier }
+            self.detectedSurfaces.removeAll { $0.id == planeAnchor.identifier }
+        }
+    }
+    
+    private func addOrUpdateSurface(_ surface: DetectedSurface) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if let index = self.detectedSurfaces.firstIndex(where: { $0.id == surface.id }) {
+                self.detectedSurfaces[index] = surface
+            } else {
+                self.detectedSurfaces.append(surface)
+            }
+        }
+    }
 }
 
 // MARK: - ARSessionDelegate
@@ -384,7 +422,7 @@ extension ARScanManager: ARSessionDelegate {
         Task { @MainActor in
             for anchor in anchors {
                 if let planeAnchor = anchor as? ARPlaneAnchor {
-                    detectedPlanes.append(planeAnchor)
+                    self.addPlane(planeAnchor)
                     let geometry = planeAnchor.geometry
                     let vertices = geometry.boundaryVertices
                     var minX: Float = .greatestFiniteMagnitude
@@ -409,9 +447,8 @@ extension ARScanManager: ARSessionDelegate {
     nonisolated func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
         Task { @MainActor in
             for anchor in anchors {
-                if let planeAnchor = anchor as? ARPlaneAnchor,
-                   let index = detectedPlanes.firstIndex(where: { $0.identifier == planeAnchor.identifier }) {
-                    detectedPlanes[index] = planeAnchor
+                if let planeAnchor = anchor as? ARPlaneAnchor {
+                    self.updatePlane(planeAnchor)
                 }
             }
             updateScanningProgress()
@@ -422,8 +459,7 @@ extension ARScanManager: ARSessionDelegate {
         Task { @MainActor in
             for anchor in anchors {
                 if let planeAnchor = anchor as? ARPlaneAnchor {
-                    detectedPlanes.removeAll { $0.identifier == planeAnchor.identifier }
-                    detectedSurfaces.removeAll { $0.id == planeAnchor.identifier }
+                    self.removePlane(planeAnchor)
                 }
             }
             updateScanningProgress()
@@ -433,21 +469,21 @@ extension ARScanManager: ARSessionDelegate {
     nonisolated func session(_ session: ARSession, didFailWithError error: Error) {
         Task { @MainActor in
             print("❌ AR session failed: \(error.localizedDescription)")
-            sessionState = .failed
+            self.safePublish(\.sessionState, value: ARSessionState.failed)
         }
     }
     
     nonisolated func sessionWasInterrupted(_ session: ARSession) {
         Task { @MainActor in
             print("⚠️ AR session interrupted")
-            sessionState = .interrupted
+            self.safePublish(\.sessionState, value: ARSessionState.interrupted)
         }
     }
     
     nonisolated func sessionInterruptionEnded(_ session: ARSession) {
         Task { @MainActor in
             print("✅ AR session interruption ended")
-            sessionState = .running
+            self.safePublish(\.sessionState, value: ARSessionState.running)
         }
     }
 }

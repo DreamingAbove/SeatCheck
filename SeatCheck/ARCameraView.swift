@@ -15,7 +15,7 @@ struct ARCameraView: UIViewRepresentable {
         arView.renderOptions.insert(.disableMotionBlur)
         
         // Set up the session
-        arManager.arView = arView
+        arManager.setARView(arView)
         
         return arView
     }
