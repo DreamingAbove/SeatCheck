@@ -7,24 +7,35 @@ import Combine
 // MARK: - AR Scan Manager
 @MainActor
 class ARScanManager: NSObject, ObservableObject {
-    static let shared = ARScanManager()
+    static let shared: ARScanManager = {
+        print("🔗 ARScanManager.shared accessed")
+        return ARScanManager()
+    }()
     
     // MARK: - Published Properties
     @Published var arView: ARView?
     @Published var isARSessionRunning = false
     @Published var detectedPlanes: [ARPlaneAnchor] = []
     @Published var scanProgress: Float = 0.0
-    @Published var scanningGuidance: String = "Move your device to scan the area"
+    @Published var scanningGuidance: String = "Point camera at items to scan for forgotten objects"
     @Published var detectedSurfaces: [DetectedSurface] = []
     @Published var hasDetectedSeat = false
     @Published var scanCoverage: Float = 0.0
     @Published var sessionState: ARSessionState = .notStarted
+    @Published var detectedObjects: [DetectedItem] = []
+    @Published var isScanningForObjects = true
+    @Published var isManualDetectionMode = true // New flag to control detection mode
     
     // MARK: - RealityKit Integration
     private let overlayManager = RealityKitOverlayManager.shared
     
     // MARK: - Item Detection Integration
     private let itemDetectionManager = ItemDetectionManager.shared
+    
+    // MARK: - Enhanced Systems
+    private let performanceSystem = PerformanceOptimizationSystem.shared
+    private let uiSystem = EnhancedUIUXSystem.shared
+    private let smartDetectionSystem = SmartDetectionSystem.shared
     
     // MARK: - AR Configuration
     private var arSession: ARSession?
@@ -37,6 +48,8 @@ class ARScanManager: NSObject, ObservableObject {
     private var lastFrameTime: Date = Date()
     private var frameCount: Int = 0
     private var lastCleanupTime: Date = Date()
+    private var isProcessingFrame: Bool = false
+    private var lastSessionRestart: Date = Date()
     
     // MARK: - Safe Publishing Helper
     private func safePublish<T>(_ keyPath: WritableKeyPath<ARScanManager, T>, value: T) {
@@ -76,6 +89,7 @@ class ARScanManager: NSObject, ObservableObject {
     
     private override init() {
         super.init()
+        print("🏗️ ARScanManager initializing...")
         setupARConfiguration()
     }
     
@@ -87,16 +101,14 @@ class ARScanManager: NSObject, ObservableObject {
         }
         
         worldTrackingConfig = ARWorldTrackingConfiguration()
-        worldTrackingConfig?.planeDetection = [.horizontal, .vertical]
-        worldTrackingConfig?.environmentTexturing = .automatic
+        // Minimal plane detection - only horizontal for basic surface understanding
+        worldTrackingConfig?.planeDetection = [.horizontal]
+        worldTrackingConfig?.environmentTexturing = .none // Disable for better performance
         
-        // Enable scene reconstruction for better understanding
-        if ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh) {
-            worldTrackingConfig?.sceneReconstruction = .mesh
-            print("✅ Scene reconstruction enabled")
-        }
+        // Disable scene reconstruction to focus on object detection
+        // worldTrackingConfig?.sceneReconstruction = .none
         
-        print("✅ ARKit configuration setup complete")
+        print("✅ ARKit configuration setup for object detection")
     }
     
     // MARK: - Session Management
@@ -117,6 +129,13 @@ class ARScanManager: NSObject, ObservableObject {
             return
         }
         
+        // Clear previous detection results when starting new session
+        clearDetectedItems()
+        
+        // Initialize enhanced systems
+        uiSystem.startScanning()
+        performanceSystem.performMemoryCleanup()
+        
         arSession = arView.session
         arSession?.run(config, options: [.resetTracking, .removeExistingAnchors])
         
@@ -129,7 +148,7 @@ class ARScanManager: NSObject, ObservableObject {
         
         scanStartTime = Date()
         
-        print("✅ AR session started")
+        print("✅ AR session started in manual detection mode")
         updateScanningGuidance()
     }
     
@@ -154,51 +173,73 @@ class ARScanManager: NSObject, ObservableObject {
         // Clear RealityKit overlays
         overlayManager.clearAllOverlays()
         
+        // Stop enhanced systems
+        uiSystem.stopScanning()
+        
         resetScanningState()
         print("⏹️ AR session stopped")
     }
     
+    private func restartARSession() {
+        guard let config = worldTrackingConfig,
+              let arView = arView,
+              isARSessionRunning else { return }
+        
+        print("🔄 Restarting AR session to prevent memory buildup")
+        
+        // Stop current session
+        arSession?.pause()
+        
+        // Clear all data
+        performMemoryCleanup()
+        
+        // Restart session
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
+            self.arSession = arView.session
+            self.arSession?.run(config, options: [.resetTracking, .removeExistingAnchors])
+            self.isARSessionRunning = true
+            self.sessionState = .running
+            print("✅ AR session restarted")
+        }
+    }
+    
     // MARK: - Scanning Logic
     private func updateScanningProgress() {
-        // Calculate scan coverage based on detected planes and camera movement
-        let planeArea = detectedPlanes.reduce(0.0) { total, plane in
-            let vertices = plane.geometry.boundaryVertices
-            guard vertices.count >= 6 else { return total } // Need at least 2 vertices (6 floats)
-            
-            var minX: Float = .greatestFiniteMagnitude
-            var maxX: Float = -.greatestFiniteMagnitude
-            var minZ: Float = .greatestFiniteMagnitude
-            var maxZ: Float = -.greatestFiniteMagnitude
-            
-            for vertex in vertices {
-                let x = vertex.x
-                let z = vertex.z
-                minX = Swift.min(minX, x)
-                maxX = Swift.max(maxX, x)
-                minZ = Swift.min(minZ, z)
-                maxZ = Swift.max(maxZ, z)
-            }
-            
-            let width = maxX - minX
-            let height = maxZ - minZ
-            return total + Double(width * height)
-        }
-        
-        // Update scan coverage (simplified calculation)
-        let newCoverage = min(Float(planeArea / 2.0), 1.0) // Normalize to 0-1
+        // Update detected objects from ItemDetectionManager
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            self.scanCoverage = newCoverage
-            self.scanProgress = newCoverage
+            self.detectedObjects = self.itemDetectionManager.detectedItems
         }
         
-        // Check if we've detected a seat-like surface
+        // Calculate scan progress based on object detection and basic surface understanding
+        let objectCount = itemDetectionManager.detectedItems.count
+        let planeCount = detectedPlanes.count
+        
+        // Progress based on object detection (primary) and basic surface understanding (secondary)
+        let objectProgress = min(Float(objectCount) * 0.2, 0.6) // Max 60% from objects
+        let surfaceProgress = min(Float(planeCount) * 0.1, 0.4) // Max 40% from surfaces
+        let newProgress = objectProgress + surfaceProgress
+        
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.scanProgress = newProgress
+            self.scanCoverage = newProgress
+        }
+        
+        // Update enhanced UI system
+        uiSystem.updateScanProgress(newProgress)
+        uiSystem.updateDetectedItemsCount(objectCount)
+        
+        // Check if we've detected a seat-like surface (still useful for context)
         checkForSeatSurfaces()
         
-        // Update RealityKit overlays
-        overlayManager.updateOverlaysForScanProgress(scanCoverage, detectedPlanes: detectedPlanes)
+        // Update RealityKit overlays with object focus - only in automatic mode
+        if !isManualDetectionMode {
+            overlayManager.updateOverlaysForObjectDetection(detectedObjects: itemDetectionManager.detectedItems, detectedPlanes: detectedPlanes)
+        }
         
-        // Update guidance based on progress
+        // Update guidance based on object detection progress
         updateScanningGuidance()
     }
     
@@ -304,17 +345,17 @@ class ARScanManager: NSObject, ObservableObject {
     }
     
     private func updateScanningGuidance() {
+        let objectCount = itemDetectionManager.detectedItems.count
         let newGuidance: String
-        if scanCoverage < 0.2 {
-            newGuidance = "Move your device slowly to scan the area"
-        } else if scanCoverage < 0.5 {
-            newGuidance = "Keep scanning - looking for surfaces"
-        } else if !hasDetectedSeat {
-            newGuidance = "Point camera at seat surfaces"
-        } else if scanCoverage < minimumScanCoverage {
-            newGuidance = "Scan around the seat area"
+        
+        if objectCount == 0 {
+            newGuidance = "Point camera at items to scan for forgotten objects"
+        } else if objectCount < 3 {
+            newGuidance = "Found \(objectCount) item(s). Keep scanning for more objects"
+        } else if objectCount < 5 {
+            newGuidance = "Found \(objectCount) items. Good progress! Scan for remaining objects"
         } else {
-            newGuidance = "Scan complete! Check for forgotten items"
+            newGuidance = "Found \(objectCount) items! Tap 'Results' when finished scanning"
         }
         
         DispatchQueue.main.async { [weak self] in
@@ -344,15 +385,28 @@ class ARScanManager: NSObject, ObservableObject {
         itemDetectionManager.clearDetectedItems()
         
         // Limit the number of detected planes to prevent memory issues
-        if detectedPlanes.count > 20 {
+        if detectedPlanes.count > 10 {
             let sortedPlanes = detectedPlanes.sorted { $0.identifier.uuidString < $1.identifier.uuidString }
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                self.detectedPlanes = Array(sortedPlanes.prefix(15))
+                self.detectedPlanes = Array(sortedPlanes.prefix(8))
             }
         }
         
-        print("🧹 Memory cleanup performed")
+        // Clear scanned areas to prevent memory buildup
+        if scannedAreas.count > 100 {
+            scannedAreas.removeAll()
+        }
+        
+        // Force garbage collection hint
+        DispatchQueue.global(qos: .background).async {
+            // This is a hint to the system to perform garbage collection
+            autoreleasepool {
+                // Empty autoreleasepool to encourage memory cleanup
+            }
+        }
+        
+        print("🧹 Aggressive memory cleanup performed")
     }
     
     // MARK: - Public Methods
@@ -385,11 +439,16 @@ class ARScanManager: NSObject, ObservableObject {
     
     // MARK: - Convenience Methods
     var isScanComplete: Bool {
-        return scanCoverage >= minimumScanCoverage && hasDetectedSeat
+        // Scan is complete when user decides to finish, not based on automatic progress
+        return false // Always let user decide when to finish
     }
     
     var canTakePhoto: Bool {
-        return isARSessionRunning && scanCoverage > 0.3
+        return isARSessionRunning && itemDetectionManager.detectedItems.count > 0
+    }
+    
+    var hasDetectedObjects: Bool {
+        return itemDetectionManager.detectedItems.count > 0
     }
     
     // MARK: - RealityKit Integration Methods
@@ -417,6 +476,27 @@ class ARScanManager: NSObject, ObservableObject {
         itemDetectionManager.clearDetectedItems()
     }
     
+    func triggerManualDetection() {
+        guard isARSessionRunning,
+              let arView = arView,
+              let frame = arView.session.currentFrame else {
+            print("❌ Cannot trigger manual detection - AR session not ready")
+            return
+        }
+        
+        print("🔍 Triggering manual object detection")
+        itemDetectionManager.detectItemsInImage(frame.capturedImage)
+        
+        // Update overlays after manual detection
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
+            self.overlayManager.updateOverlaysForObjectDetection(
+                detectedObjects: self.itemDetectionManager.detectedItems, 
+                detectedPlanes: self.detectedPlanes
+            )
+        }
+    }
+    
     func setARView(_ arView: ARView) {
         // Set the AR view and configure it properly
         DispatchQueue.main.async { [weak self] in
@@ -430,8 +510,8 @@ class ARScanManager: NSObject, ObservableObject {
         // Set up RealityKit overlays
             self.overlayManager.setupWithARView(arView)
         
-            // Start the AR session
-            self.startARSession()
+        // Note: AR session will be started manually by user action
+        print("✅ AR view configured, ready for manual session start")
         }
     }
     
@@ -474,28 +554,52 @@ class ARScanManager: NSObject, ObservableObject {
 // MARK: - ARSessionDelegate
 extension ARScanManager: ARSessionDelegate {
     nonisolated func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        // Don't retain the frame - just extract what we need immediately
+        // Extract only the essential data immediately and don't retain the frame
         let capturedImage = frame.capturedImage
+        let timestamp = frame.timestamp
         
+        // Process immediately without retaining the frame in any closures
+        processFrameData(capturedImage: capturedImage, timestamp: timestamp)
+        
+        // Analyze surface for smart detection
         Task { @MainActor in
+            smartDetectionSystem.analyzeSurface(from: frame)
+        }
+    }
+    
+    nonisolated private func processFrameData(capturedImage: CVPixelBuffer, timestamp: TimeInterval) {
+        Task { @MainActor in
+            // Prevent concurrent frame processing to avoid memory buildup
+            guard !isProcessingFrame else { return }
+            
+            isProcessingFrame = true
+            defer { isProcessingFrame = false }
+            
             frameCount += 1
             let now = Date()
             
-            // Update every 15 frames to reduce frequency and prevent memory buildup
+            // Update every 15 frames for more responsive object detection
             if frameCount % 15 == 0 {
                 lastFrameTime = now
                 updateScanningProgress()
                 
-                // Perform item detection every 45 frames (about once per 1.5 seconds)
-                if frameCount % 45 == 0 {
-                    // Create a minimal frame-like object for detection
+                // Perform item detection every 30 frames (about once per second) - only in automatic mode
+                if frameCount % 30 == 0 && !isManualDetectionMode {
+                    print("🔍 Performing automatic item detection on frame \(frameCount)")
                     itemDetectionManager.detectItemsInImage(capturedImage)
+                    print("📊 Current detected items count: \(itemDetectionManager.detectedItems.count)")
                 }
                 
-                // Clean up memory every 5 minutes
-                if now.timeIntervalSince(lastCleanupTime) > 300 {
+                // Clean up memory every 2 minutes
+                if now.timeIntervalSince(lastCleanupTime) > 120 {
                     performMemoryCleanup()
                     lastCleanupTime = now
+                }
+                
+                // Restart session every 5 minutes to prevent memory buildup
+                if now.timeIntervalSince(lastSessionRestart) > 300 {
+                    restartARSession()
+                    lastSessionRestart = now
                 }
             }
         }

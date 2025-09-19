@@ -26,134 +26,6 @@ struct ARCameraView: UIViewRepresentable {
     }
 }
 
-// MARK: - AR Scan Overlay View
-struct ARScanOverlayView: View {
-    @ObservedObject var arManager: ARScanManager
-    @State private var showingScanResults = false
-    
-    var body: some View {
-        VStack {
-            // Top guidance area
-            VStack(spacing: 8) {
-                HStack {
-                    // Session status indicator
-                    Circle()
-                        .fill(sessionStatusColor)
-                        .frame(width: 12, height: 12)
-                    
-                    Text(arManager.scanningGuidance)
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    
-                    Spacer()
-                }
-                
-                // Progress bar
-                ProgressView(value: arManager.scanProgress)
-                    .progressViewStyle(LinearProgressViewStyle(tint: .white))
-                    .scaleEffect(y: 2)
-                
-                // Scan stats
-                HStack {
-                    Label("\(Int(arManager.scanCoverage * 100))%", systemImage: "viewfinder")
-                    
-                    Spacer()
-                    
-                    if arManager.hasDetectedSeat {
-                        Label("Seat Found", systemImage: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                    }
-                    
-                    Spacer()
-                    
-                    Label("\(arManager.detectedPlanes.count)", systemImage: "rectangle.3.group")
-                }
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.8))
-            }
-            .padding()
-            .background(Color.black.opacity(0.6))
-            .cornerRadius(12)
-            .padding()
-            
-            Spacer()
-            
-            // Bottom action area
-            VStack(spacing: 16) {
-                // Scan completion indicator
-                if arManager.isScanComplete {
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("Scan Complete!")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                    }
-                    .padding()
-                    .background(Color.green.opacity(0.8))
-                    .cornerRadius(12)
-                }
-                
-                // Action buttons
-                HStack(spacing: 20) {
-                    // Scan results button
-                    if arManager.scanCoverage > 0.3 {
-                        Button(action: {
-                            showingScanResults = true
-                        }) {
-                            VStack {
-                                Image(systemName: "list.bullet.rectangle")
-                                    .font(.title2)
-                                Text("Results")
-                                    .font(.caption)
-                            }
-                            .foregroundColor(.white)
-                            .frame(width: 70, height: 70)
-                            .background(Color.blue.opacity(0.8))
-                            .cornerRadius(35)
-                        }
-                    }
-                    
-                    // Reset scan button
-                    Button(action: {
-                        arManager.stopARSession()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            arManager.startARSession()
-                        }
-                    }) {
-                        VStack {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.title2)
-                            Text("Reset")
-                                .font(.caption)
-                        }
-                        .foregroundColor(.white)
-                        .frame(width: 70, height: 70)
-                        .background(Color.orange.opacity(0.8))
-                        .cornerRadius(35)
-                    }
-                }
-            }
-            .padding()
-        }
-        .sheet(isPresented: $showingScanResults) {
-            ScanResultsView(scanResults: arManager.getScanResults())
-        }
-    }
-    
-    private var sessionStatusColor: Color {
-        switch arManager.sessionState {
-        case .running:
-            return .green
-        case .paused, .interrupted:
-            return .orange
-        case .failed:
-            return .red
-        default:
-            return .gray
-        }
-    }
-}
 
 // MARK: - Scan Results View
 struct ScanResultsView: View {
@@ -313,6 +185,9 @@ struct SurfaceRowView: View {
         case .table: return "table"
         case .floor: return "rectangle"
         case .wall: return "rectangle.portrait"
+        case .chair: return "chair"
+        case .ground: return "square.grid.3x3"
+        case .lap: return "person"
         case .unknown: return "questionmark.circle"
         }
     }
@@ -323,6 +198,9 @@ struct SurfaceRowView: View {
         case .table: return .brown
         case .floor: return .gray
         case .wall: return .orange
+        case .chair: return .green
+        case .ground: return .brown
+        case .lap: return .purple
         case .unknown: return .secondary
         }
     }
@@ -333,6 +211,9 @@ struct SurfaceRowView: View {
         case .table: return "Table Surface"
         case .floor: return "Floor Surface"
         case .wall: return "Wall Surface"
+        case .chair: return "Chair Surface"
+        case .ground: return "Ground Surface"
+        case .lap: return "Lap Surface"
         case .unknown: return "Unknown Surface"
         }
     }
@@ -360,6 +241,5 @@ struct RecommendationRow: View {
 
 // MARK: - Preview
 #Preview {
-    let arManager = ARScanManager.shared
-    return ARScanOverlayView(arManager: arManager)
+    ARCameraView(arManager: ARScanManager.shared)
 }

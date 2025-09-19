@@ -43,11 +43,10 @@ struct ARScanResultsView: View {
                         }
                     }
                     
-                    // Progress summary
+                    // Object summary
                     HStack {
-                        Label("\(arManager.detectedPlanes.count) surfaces", systemImage: "rectangle.3.group")
+                        Label("\(arManager.getDetectedItems().count) objects detected", systemImage: "magnifyingglass")
                         Spacer()
-                        Label("\(Int(arManager.scanProgress * 100))% scanned", systemImage: "viewfinder")
                     }
                     .font(.caption)
                     .foregroundColor(.secondary)

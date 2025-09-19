@@ -29,58 +29,40 @@ struct ARScanView: View {
                 ARCameraView(arManager: arManager)
                     .ignoresSafeArea()
                 
-                // AR Overlay
-                ARScanOverlayView(arManager: arManager)
-                
                 VStack {
-                    // MARK: - Simplified Top HUD (Progress Only)
-                    topHUDView
-                    
-                    Spacer()
-                    
-                    // MARK: - Floating Navigation Buttons
+                    // MARK: - Clean Top Navigation
                     HStack {
-                        // Cancel button (top left)
+                        // Cancel button
                         Button("Cancel") {
                             dismiss()
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.6))
-                        .cornerRadius(6)
-                        .shadow(radius: 2)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.7))
+                        .cornerRadius(8)
+                        .shadow(radius: 3)
                         
                         Spacer()
-                        
-                        // Camera button (top right)
-                        Button("Camera") {
-                            dismiss()
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.6))
-                        .cornerRadius(6)
-                        .shadow(radius: 2)
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
                     
                     Spacer()
                     
-                    // MARK: - Instruction Text (Above Bottom Toolbar)
-                    if arManager.scanProgress < 0.8 {
-                        Text(scanInstructionText)
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(Color.black.opacity(0.6))
-                            .cornerRadius(8)
-                            .shadow(radius: 2)
-                            .padding(.bottom, 8)
+                    // MARK: - Enhanced Status Area
+                    VStack(spacing: 12) {
+                        // Enhanced instruction view
+                        EnhancedInstructionView(uiSystem: EnhancedUIUXSystem.shared)
+                        
+                        // Enhanced progress view
+                        EnhancedScanProgressView(uiSystem: EnhancedUIUXSystem.shared)
+                        
+                        // Celebration view
+                        CelebrationView(uiSystem: EnhancedUIUXSystem.shared)
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
                     
                     // MARK: - Balanced Bottom Toolbar
                     bottomToolbarView
@@ -140,124 +122,129 @@ struct ARScanView: View {
         }
     }
     
-    // MARK: - Simplified Top HUD View (Progress Only)
-    private var topHUDView: some View {
-        VStack(spacing: 8) {
-            // Progress bar
-            ProgressView(value: arManager.scanProgress, total: 1.0)
-                .progressViewStyle(LinearProgressViewStyle(tint: .green))
-                .frame(height: 6)
-                .padding(.horizontal, 40)
-            
-            // Percentage text
-            Text("\(Int(arManager.scanProgress * 100))%")
-                .font(.caption)
-                .foregroundColor(.white)
-                .shadow(radius: 2)
-        }
-        .padding(.top, 8)
-        .padding(.bottom, 12)
-        .background(Color.black.opacity(0.4))
-    }
     
-    // MARK: - Balanced Bottom Toolbar View
+    // MARK: - Clean Bottom Toolbar View
     private var bottomToolbarView: some View {
-        HStack(spacing: 20) {
-            // Settings button (with label)
-            Button(action: { showingSettings = true }) {
-                VStack(spacing: 4) {
-                    Image(systemName: "gearshape.fill")
-                        .font(.title2)
-                    Text("Settings")
-                        .font(.caption2)
-                }
-                .foregroundColor(.white)
-                .frame(width: 60, height: 60)
-                .background(Color.black.opacity(0.6))
-                .cornerRadius(12)
-                .shadow(radius: 2)
-            }
-            
-            // Primary scan button (balanced size)
-            Button(action: captureARFrame) {
-                VStack(spacing: 4) {
-                    Image(systemName: arManager.isARSessionRunning ? "stop.fill" : "play.fill")
-                        .font(.title)
-                    Text(arManager.isARSessionRunning ? "Stop" : "Start")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                }
-                .foregroundColor(.white)
-                .frame(width: 80, height: 80)
-                .background(arManager.isARSessionRunning ? Color.gray : Color.blue)
-                .cornerRadius(16)
-                .shadow(radius: 3)
-            }
-            .disabled(!arManager.canTakePhoto && arManager.isARSessionRunning)
-            
-            // Results button (with label)
-            Button(action: { showingScanResults = true }) {
-                VStack(spacing: 4) {
+        HStack(spacing: 30) {
+            // Results button
+            Button(action: { 
+                print("🔍 Results button tapped - detected items: \(arManager.getDetectedItems().count)")
+                showingScanResults = true 
+            }) {
+                VStack(spacing: 6) {
                     Image(systemName: "list.bullet.rectangle")
                         .font(.title2)
                     Text("Results")
-                        .font(.caption2)
+                        .font(.caption)
+                        .fontWeight(.medium)
                 }
                 .foregroundColor(.white)
-                .frame(width: 60, height: 60)
-                .background(Color.black.opacity(0.6))
-                .cornerRadius(12)
-                .shadow(radius: 2)
+                .frame(width: 70, height: 70)
+                .background(arManager.hasDetectedObjects ? Color.blue : Color.gray)
+                .cornerRadius(16)
+                .shadow(radius: 3)
             }
-            .disabled(arManager.getDetectedItems().isEmpty)
+            .disabled(!arManager.hasDetectedObjects)
+            
+            // Primary action button
+            Button(action: { 
+                print("🔍 Start detection button tapped")
+                startObjectDetection() 
+            }) {
+                VStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass.circle.fill")
+                        .font(.title)
+                    Text("Detect")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(.white)
+                .frame(width: 80, height: 80)
+                .background(arManager.isARSessionRunning ? Color.green : Color.blue)
+                .cornerRadius(20)
+                .shadow(radius: 4)
+            }
+            .disabled(!ARWorldTrackingConfiguration.isSupported)
+            
+            // Settings button
+            Button(action: { showingSettings = true }) {
+                VStack(spacing: 6) {
+                    Image(systemName: "gearshape.fill")
+                        .font(.title2)
+                    Text("Settings")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(.white)
+                .frame(width: 70, height: 70)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(16)
+                .shadow(radius: 3)
+            }
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
-        .background(Color.black.opacity(0.4))
+        .padding(.horizontal, 40)
+        .padding(.bottom, 50)
     }
     
     // MARK: - Computed Properties
     private var scanInstructionText: String {
-        if arManager.scanProgress < 0.2 {
-            return "Move your device slowly to scan"
-        } else if arManager.scanProgress < 0.5 {
-            return "Keep scanning for surfaces"
-        } else if !arManager.hasDetectedSeat {
-            return "Point camera at seat surfaces"
-        } else if arManager.scanProgress < 0.8 {
-            return "Scan around the seat area"
+        let objectCount = arManager.getDetectedItems().count
+        
+        if !arManager.isARSessionRunning {
+            return "Tap 'Detect' to start scanning for items"
+        } else if objectCount == 0 {
+            return "Point camera at items and tap 'Detect' to scan"
+        } else if objectCount < 3 {
+            return "Found \(objectCount) item(s). Keep detecting for more objects"
+        } else if objectCount < 5 {
+            return "Found \(objectCount) items. Good progress! Keep detecting"
         } else {
-            return "Scan complete! Check for items"
+            return "Found \(objectCount) items! Tap 'Results' when finished"
         }
     }
     
     // MARK: - Methods
     private func setupARMode() {
         if ARWorldTrackingConfiguration.isSupported {
-            arManager.startARSession()
+            print("✅ AR is supported, ready for manual session start")
+        } else {
+            print("❌ AR is not supported on this device")
         }
     }
     
-    private func captureARFrame() {
+    private func startObjectDetection() {
+        print("🔍 startObjectDetection called")
+        
+        // Start AR session if not already running
+        if !arManager.isARSessionRunning {
+            print("🚀 Starting AR session...")
+            arManager.startARSession()
+            
+            // Wait a moment for the session to initialize before detecting
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.performObjectDetection()
+            }
+        } else {
+            // Session is already running, perform detection immediately
+            performObjectDetection()
+        }
+    }
+    
+    private func performObjectDetection() {
         guard arManager.isARSessionRunning else {
             print("❌ AR session not running")
             return
         }
         
-        guard let arView = arManager.arView,
-              let frame = arView.session.currentFrame else {
-            print("❌ No AR frame available")
-            return
-        }
-        
-        // Convert AR frame to UIImage
-        let image = UIImage(ciImage: CIImage(cvPixelBuffer: frame.capturedImage))
-        capturedImage = image
-        showingItemNaming = true
+        print("✅ AR session running, triggering manual detection")
+        // Use the new manual detection method
+        arManager.triggerManualDetection()
         
         // Add haptic feedback
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
+        
+        print("🔍 Manual object detection triggered")
     }
     
     private func showScanResults() {
@@ -265,7 +252,9 @@ struct ARScanView: View {
     }
     
     private func cleanup() {
-        arManager.pauseARSession()
+        print("🧹 Cleaning up AR session")
+        arManager.stopARSession()
+        arManager.clearDetectedItems()
     }
     
     private func getIconForItem(_ itemName: String) -> String {
@@ -330,9 +319,9 @@ struct ARSettingsView: View {
                 .background(Color.gray.opacity(0.1))
                 .cornerRadius(12)
                 
-                // Scan Information (User-friendly)
+                // Object Detection Information
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Scan Information")
+                    Text("Object Detection")
                         .font(.headline)
                     
                     HStack {
@@ -344,20 +333,19 @@ struct ARSettingsView: View {
                     }
                     
                     HStack {
-                        Text("Progress:")
+                        Text("Objects Found:")
                         Spacer()
-                        Text("\(Int(arManager.scanProgress * 100))% complete")
+                        Text("\(arManager.getDetectedItems().count) items")
                             .fontWeight(.semibold)
+                            .foregroundColor(arManager.hasDetectedObjects ? .green : .secondary)
                     }
                     
-                    if arManager.hasDetectedSeat {
-                        HStack {
-                            Text("Seat Detected:")
-                            Spacer()
-                            Text("Yes")
-                                .fontWeight(.semibold)
-                                .foregroundColor(.green)
-                        }
+                    HStack {
+                        Text("Detection Confidence:")
+                        Spacer()
+                        Text("\(Int(arManager.getItemDetectionManager().detectionConfidence * 100))%")
+                            .fontWeight(.semibold)
+                            .foregroundColor(confidenceColor)
                     }
                 }
                 .padding()
@@ -400,26 +388,39 @@ struct ARSettingsView: View {
     }
     
     private var scanStatusText: String {
-        if arManager.scanProgress < 0.2 {
-            return "Getting started"
-        } else if arManager.scanProgress < 0.5 {
+        let objectCount = arManager.getDetectedItems().count
+        
+        if objectCount == 0 {
+            return "Ready to scan"
+        } else if objectCount < 3 {
             return "Scanning in progress"
-        } else if !arManager.hasDetectedSeat {
-            return "Looking for seats"
-        } else if arManager.scanProgress < 0.8 {
-            return "Almost complete"
+        } else if objectCount < 5 {
+            return "Good progress"
         } else {
-            return "Scan complete"
+            return "Ready to finish"
         }
     }
     
     private var scanStatusColor: Color {
-        if arManager.scanProgress < 0.5 {
+        let objectCount = arManager.getDetectedItems().count
+        
+        if objectCount == 0 {
             return .orange
-        } else if arManager.scanProgress < 0.8 {
+        } else if objectCount < 3 {
             return .blue
         } else {
             return .green
+        }
+    }
+    
+    private var confidenceColor: Color {
+        let confidence = arManager.getItemDetectionManager().detectionConfidence
+        if confidence > 0.7 {
+            return .green
+        } else if confidence > 0.4 {
+            return .orange
+        } else {
+            return .red
         }
     }
 }

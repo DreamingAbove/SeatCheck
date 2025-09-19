@@ -50,14 +50,19 @@ class ItemDetectionManager: ObservableObject {
     
     // MARK: - Detection Methods
     func detectItems(in pixelBuffer: CVPixelBuffer) {
-        guard !isDetecting else { return }
+        guard !isDetecting else { 
+            print("⚠️ ItemDetectionManager: Already detecting, skipping")
+            return 
+        }
         
+        print("🔍 ItemDetectionManager: Starting detection on pixel buffer")
         isDetecting = true
         
         let imageRequestHandler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
         
         do {
             try imageRequestHandler.perform(visionRequests)
+            print("✅ ItemDetectionManager: Vision requests completed successfully")
         } catch {
             print("❌ Vision request failed: \(error)")
             isDetecting = false
@@ -89,18 +94,22 @@ class ItemDetectionManager: ObservableObject {
     
     private func handleTextDetection(request: VNRequest, error: Error?) {
         guard let observations = request.results as? [VNRecognizedTextObservation] else {
+            print("⚠️ ItemDetectionManager: No text observations found")
             return
         }
         
+        print("📝 ItemDetectionManager: Found \(observations.count) text observations")
         var newItems: [DetectedItem] = []
         
         for observation in observations {
             guard observation.confidence > 0.5 else { continue }
             
             let recognizedText = observation.topCandidates(1).first?.string.lowercased() ?? ""
+            print("📝 Text detected: '\(recognizedText)' with confidence: \(observation.confidence)")
             
             for item in commonItems {
                 if recognizedText.contains(item) {
+                    print("✅ Found item in text: \(item)")
                     let item = DetectedItem(
                         id: UUID(),
                         name: item,
@@ -115,23 +124,28 @@ class ItemDetectionManager: ObservableObject {
         
         DispatchQueue.main.async { [weak self] in
             self?.updateDetectedItems(newItems)
+            self?.isDetecting = false
         }
     }
     
     private func handleImageClassification(request: VNRequest, error: Error?) {
         guard let observations = request.results as? [VNClassificationObservation] else {
+            print("⚠️ ItemDetectionManager: No classification observations found")
             return
         }
         
+        print("🖼️ ItemDetectionManager: Found \(observations.count) classification observations")
         var newItems: [DetectedItem] = []
         
         for observation in observations.prefix(5) { // Top 5 classifications
             guard observation.confidence > 0.3 else { continue }
             
             let identifier = observation.identifier.lowercased()
+            print("🖼️ Classification: '\(identifier)' with confidence: \(observation.confidence)")
             
             for item in commonItems {
                 if identifier.contains(item) {
+                    print("✅ Found item in classification: \(item)")
                     let item = DetectedItem(
                         id: UUID(),
                         name: item,
@@ -146,6 +160,7 @@ class ItemDetectionManager: ObservableObject {
         
         DispatchQueue.main.async { [weak self] in
             self?.updateDetectedItems(newItems)
+            self?.isDetecting = false
         }
     }
     
@@ -156,6 +171,7 @@ class ItemDetectionManager: ObservableObject {
     }
     
     private func updateDetectedItems(_ newItems: [DetectedItem]) {
+        print("🔄 ItemDetectionManager: Updating detected items with \(newItems.count) new items")
         // Merge with existing items, avoiding duplicates
         var existingItems = detectedItems
         
@@ -168,7 +184,10 @@ class ItemDetectionManager: ObservableObject {
             }
             
             if !isDuplicate {
+                print("➕ Adding new item: \(newItem.name) with confidence: \(newItem.confidence)")
                 existingItems.append(newItem)
+            } else {
+                print("🔄 Duplicate item found, skipping: \(newItem.name)")
             }
         }
         
@@ -177,6 +196,8 @@ class ItemDetectionManager: ObservableObject {
         
         // Update overall confidence
         detectionConfidence = detectedItems.isEmpty ? 0.0 : detectedItems.map(\.confidence).reduce(0, +) / Float(detectedItems.count)
+        
+        print("📊 ItemDetectionManager: Total detected items: \(detectedItems.count), overall confidence: \(detectionConfidence)")
     }
     
     // MARK: - Public Methods

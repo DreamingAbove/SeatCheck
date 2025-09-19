@@ -32,7 +32,52 @@ enum SurfaceType {
     case table
     case floor
     case wall
+    case chair
+    case ground
+    case lap
     case unknown
+    
+    var displayName: String {
+        switch self {
+        case .seat:
+            return "Seat"
+        case .table:
+            return "Table"
+        case .floor:
+            return "Floor"
+        case .wall:
+            return "Wall"
+        case .chair:
+            return "Chair"
+        case .ground:
+            return "Ground"
+        case .lap:
+            return "Lap"
+        case .unknown:
+            return "Unknown"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .seat:
+            return "chair"
+        case .table:
+            return "table.furniture"
+        case .floor:
+            return "square.grid.3x3"
+        case .wall:
+            return "rectangle"
+        case .chair:
+            return "chair"
+        case .ground:
+            return "square.grid.3x3"
+        case .lap:
+            return "person"
+        case .unknown:
+            return "questionmark"
+        }
+    }
 }
 
 struct DetectedSurface: Identifiable {

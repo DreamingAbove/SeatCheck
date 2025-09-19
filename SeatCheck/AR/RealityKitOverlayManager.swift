@@ -7,7 +7,10 @@ import Combine
 // MARK: - RealityKit Overlay Manager
 @MainActor
 class RealityKitOverlayManager: ObservableObject {
-    static let shared = RealityKitOverlayManager()
+    static let shared: RealityKitOverlayManager = {
+        print("🔗 RealityKitOverlayManager.shared accessed")
+        return RealityKitOverlayManager()
+    }()
     
     // MARK: - Published Properties
     @Published var overlaysEnabled = true
@@ -47,7 +50,9 @@ class RealityKitOverlayManager: ObservableObject {
         return material
     }()
     
-    private init() {}
+    private init() {
+        print("🏗️ RealityKitOverlayManager initializing...")
+    }
     
     // MARK: - Safe Publishing Helper
     private func safePublish(_ keyPath: WritableKeyPath<RealityKitOverlayManager, [AROverlay]>, value: [AROverlay]) {
@@ -312,11 +317,16 @@ class RealityKitOverlayManager: ObservableObject {
     func clearOverlaysOfType(_ type: AROverlayType) {
         let overlaysToRemove = activeOverlays.filter { $0.type == type }
         
+        guard !overlaysToRemove.isEmpty else {
+            // No overlays to clear, avoid unnecessary logging
+            return
+        }
+        
         for overlay in overlaysToRemove {
             removeOverlay(overlay.id)
         }
         
-        print("✅ Cleared overlays of type: \(type)")
+        print("✅ Cleared \(overlaysToRemove.count) overlays of type: \(type)")
     }
     
     // MARK: - Animations
@@ -434,6 +444,44 @@ class RealityKitOverlayManager: ObservableObject {
         
         // Show completion celebration when scan is done
         if progress >= 0.9 && !celebrationActive {
+            showScanCompletion()
+        }
+    }
+    
+    func updateOverlaysForObjectDetection(detectedObjects: [DetectedItem], detectedPlanes: [ARPlaneAnchor]) {
+        // Only update if there are actually detected objects
+        guard !detectedObjects.isEmpty else {
+            // Clear existing overlays if no objects detected
+            clearOverlaysOfType(.itemFound)
+            return
+        }
+        
+        // Clear existing object overlays
+        clearOverlaysOfType(.itemFound)
+        
+        // Add overlays for detected objects
+        for item in detectedObjects {
+            // Get estimated 3D position from bounding box
+            let estimatedPosition = SIMD3<Float>(
+                Float(item.boundingBox.midX - 0.5) * 2.0,
+                Float(item.boundingBox.midY - 0.5) * 2.0,
+                0.0 // Assume on ground plane
+            )
+            
+            addDetectedItemOverlay(at: estimatedPosition, itemName: item.displayName, confidence: item.confidence)
+        }
+        
+        // Still show basic surface highlights for context (minimal)
+        if detectedPlanes.count > 0 {
+            // Only show one representative plane highlight
+            if let firstPlane = detectedPlanes.first {
+                clearOverlaysOfType(.seatHighlight)
+                addSeatHighlight(for: firstPlane)
+            }
+        }
+        
+        // Show completion celebration when objects are found
+        if detectedObjects.count >= 3 && !celebrationActive {
             showScanCompletion()
         }
     }
