@@ -76,10 +76,20 @@ class EnhancedObjectRecognitionManager: ObservableObject {
         print("🔧 Setting up enhanced vision requests...")
         
         // 1. Object Detection Request (iOS 12+)
-        let objectDetectionRequest = VNCoreMLRequest(model: try! VNCoreMLModel(for: YOLOv3().model)) { [weak self] request, error in
-            self?.handleObjectDetection(request: request, error: error)
+        var objectDetectionRequest: VNCoreMLRequest?
+        do {
+            let yoloInstance = try YOLOv3()
+            if let model = yoloInstance.model {
+            objectDetectionRequest = VNCoreMLRequest(model: try! VNCoreMLModel(for: model)) { [weak self] request, error in
+                self?.handleObjectDetection(request: request, error: error)
+            }
+            objectDetectionRequest?.imageCropAndScaleOption = VNImageCropAndScaleOption.scaleFill
+            } else {
+                print("⚠️ YOLOv3 model not available - skipping object detection")
+            }
+        } catch {
+            print("⚠️ Failed to initialize YOLOv3: \(error)")
         }
-        objectDetectionRequest.imageCropAndScaleOption = .scaleFill
         
         // 2. Image Classification Request
         let classificationRequest = VNClassifyImageRequest { [weak self] request, error in
@@ -112,7 +122,7 @@ class EnhancedObjectRecognitionManager: ObservableObject {
             textRequest,
             rectangleRequest,
             faceRequest
-        ]
+        ].compactMap { $0 }
         
         print("✅ Enhanced vision requests configured")
     }

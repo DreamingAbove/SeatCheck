@@ -339,13 +339,17 @@ struct EnhancedARScanView: View {
                 if let frame = arView.session.currentFrame {
                     await enhancedRecognition.detectObjectsInARFrame(frame)
                     
-                    // Update scan progress
+                    // Update scan progress on main thread
                     let timeSinceLastScan = Date().timeIntervalSince(lastScanTime)
-                    scanProgress = min(1.0, Float(timeSinceLastScan / 2.0)) // 2 seconds for full progress
+                    let newProgress = min(1.0, Float(timeSinceLastScan / 2.0)) // 2 seconds for full progress
                     
-                    if scanProgress >= 1.0 {
-                        lastScanTime = Date()
-                        scanProgress = 0.0
+                    await MainActor.run {
+                        scanProgress = newProgress
+                        
+                        if scanProgress >= 1.0 {
+                            lastScanTime = Date()
+                            scanProgress = 0.0
+                        }
                     }
                 }
                 
