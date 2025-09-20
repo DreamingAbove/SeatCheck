@@ -8,10 +8,12 @@ struct ScanModeSelectionView: View {
     @State private var selectedMode: ScanMode = .camera
     @State private var showingCameraScan = false
     @State private var showingARScan = false
+    @State private var showingEnhancedARScan = false
     
     enum ScanMode: String, CaseIterable {
         case camera = "Camera"
         case ar = "AR"
+        case enhancedAR = "Enhanced AR"
         
         var icon: String {
             switch self {
@@ -19,6 +21,8 @@ struct ScanModeSelectionView: View {
                 return "camera"
             case .ar:
                 return "arkit"
+            case .enhancedAR:
+                return "brain.head.profile"
             }
         }
         
@@ -28,6 +32,8 @@ struct ScanModeSelectionView: View {
                 return "Take photos of your items with the camera"
             case .ar:
                 return "Use AR to scan and detect surfaces"
+            case .enhancedAR:
+                return "AI-powered object recognition with AR visualization"
             }
         }
         
@@ -37,6 +43,8 @@ struct ScanModeSelectionView: View {
                 return .blue
             case .ar:
                 return .green
+            case .enhancedAR:
+                return .purple
             }
         }
     }
@@ -109,14 +117,20 @@ struct ScanModeSelectionView: View {
         .sheet(isPresented: $showingARScan) {
             ARScanView(onItemCaptured: onItemCaptured)
         }
+        .sheet(isPresented: $showingEnhancedARScan) {
+            EnhancedARScanView()
+        }
     }
     
     private func startScanning() {
         // Present the appropriate scan view
-        if selectedMode == .camera {
+        switch selectedMode {
+        case .camera:
             showingCameraScan = true
-        } else {
+        case .ar:
             showingARScan = true
+        case .enhancedAR:
+            showingEnhancedARScan = true
         }
     }
 }

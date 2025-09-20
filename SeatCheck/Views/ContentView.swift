@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var showingNewSession = false
     @State private var showingCustomSession = false
     @State private var showingCameraScan = false
+    @State private var showingObjectTraining = false
     @State private var showingChecklistSettings = false
     @State private var showingSessionHistory = false
     @State private var showingNotificationSettings = false
@@ -125,6 +126,22 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                        
+                        Button(action: {
+                            showingObjectTraining = true
+                        }) {
+                            HStack {
+                                Image(systemName: "brain.head.profile")
+                                    .font(.title2)
+                                Text("Train Objects")
+                                    .font(.headline)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.purple)
                             .foregroundColor(.white)
                             .cornerRadius(12)
                         }
@@ -242,6 +259,9 @@ struct ContentView: View {
                     // Handle scanned item
                     print("Item scanned: \(scannedItem.title)")
                 }
+            }
+            .sheet(isPresented: $showingObjectTraining) {
+                ObjectTrainingView()
             }
             .sheet(isPresented: $showingChecklistSettings) {
                 ChecklistSettingsView()

@@ -20,9 +20,12 @@ class PerformanceOptimizationSystem: ObservableObject {
     @Published var memoryUsage: Double = 0.0
     @Published var batteryLevel: Float = 1.0
     @Published var thermalState: ProcessInfo.ThermalState = .nominal
+    @Published var isLowPowerMode = false
+    @Published var detectionFrameRate: Float = 30.0
+    @Published var cpuUsage: Float = 0.0
     
     // MARK: - Performance Settings
-    private var performanceLevel: PerformanceLevel = .high
+    @Published var currentPerformanceLevel: PerformanceLevel = .high
     private var lastFrameTime: CFTimeInterval = 0
     private var frameCount: Int = 0
     private var frameRateHistory: [Double] = []
@@ -30,11 +33,24 @@ class PerformanceOptimizationSystem: ObservableObject {
     // MARK: - LOD Management
     private var lodEntities: [UUID: LODComponent] = [:]
     private var performanceTimer: Timer?
+    private var frameRateCounter = FrameRateCounter()
+    private var memoryMonitor = MemoryMonitor()
+    private var cpuMonitor = CPUMonitor()
+    private var cancellables = Set<AnyCancellable>()
     
     private init() {
         setupPerformanceMonitoring()
+        setupSubscriptions()
         updateBatteryLevel()
         updateThermalState()
+        
+        // Monitor low power mode
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(lowPowerModeChanged),
+            name: .NSProcessInfoPowerStateDidChange,
+            object: nil
+        )
     }
     
     // MARK: - Performance Monitoring
@@ -46,21 +62,26 @@ class PerformanceOptimizationSystem: ObservableObject {
         }
     }
     
+    private func setupSubscriptions() {
+        // Monitor battery level changes
+        Timer.publish(every: 5.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.updateBatteryLevel()
+            }
+            .store(in: &cancellables)
+    }
+    
     private func updatePerformanceMetrics() {
         // Update frame rate
-        let currentTime = CACurrentMediaTime()
-        if lastFrameTime > 0 {
-            let frameRate = 1.0 / (currentTime - lastFrameTime)
-            frameRateHistory.append(frameRate)
-            if frameRateHistory.count > 10 {
-                frameRateHistory.removeFirst()
-            }
-            currentFrameRate = frameRateHistory.reduce(0, +) / Double(frameRateHistory.count)
-        }
-        lastFrameTime = currentTime
+        detectionFrameRate = frameRateCounter.currentFrameRate
+        currentFrameRate = Double(detectionFrameRate)
         
         // Update memory usage
-        updateMemoryUsage()
+        memoryUsage = Double(memoryMonitor.currentMemoryUsage)
+        
+        // Update CPU usage
+        cpuUsage = cpuMonitor.currentCPUUsage
         
         // Update battery and thermal state
         updateBatteryLevel()
@@ -91,35 +112,45 @@ class PerformanceOptimizationSystem: ObservableObject {
     private func updateBatteryLevel() {
         UIDevice.current.isBatteryMonitoringEnabled = true
         batteryLevel = UIDevice.current.batteryLevel
+        isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
     }
     
     private func updateThermalState() {
         thermalState = ProcessInfo.processInfo.thermalState
     }
     
+    @objc private func lowPowerModeChanged() {
+        isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+        adjustPerformanceLevel()
+    }
+    
     // MARK: - Performance Level Adjustment
     private func adjustPerformanceLevel() {
         let newLevel: PerformanceLevel
         
-        // Determine performance level based on metrics
-        if thermalState == .critical || batteryLevel < 0.2 {
+        // Check for critical conditions first
+        if thermalState == .critical || batteryLevel < 0.1 {
             newLevel = .low
-        } else if thermalState == .serious || batteryLevel < 0.5 || currentFrameRate < 30 {
+        } else if thermalState == .serious || isLowPowerMode {
+            newLevel = .low
+        } else if batteryLevel < 0.2 {
             newLevel = .medium
-        } else if currentFrameRate > 50 && memoryUsage < 200 {
+        } else if memoryUsage > 0.8 || cpuUsage > 0.8 {
+            newLevel = .medium
+        } else if detectionFrameRate < 15 {
             newLevel = .high
         } else {
             newLevel = .medium
         }
         
-        if newLevel != performanceLevel {
-            performanceLevel = newLevel
+        if newLevel != currentPerformanceLevel {
+            currentPerformanceLevel = newLevel
             applyPerformanceSettings()
         }
     }
     
     private func applyPerformanceSettings() {
-        switch performanceLevel {
+        switch currentPerformanceLevel {
         case .high:
             // Full quality, all features enabled
             break
@@ -165,7 +196,7 @@ class PerformanceOptimizationSystem: ObservableObject {
         }
         
         // Adjust based on performance
-        switch performanceLevel {
+        switch currentPerformanceLevel {
         case .high:
             return baseLevel
         case .medium:
@@ -215,7 +246,7 @@ class PerformanceOptimizationSystem: ObservableObject {
     
     // MARK: - Public Interface
     func getOptimalFrameRate() -> Double {
-        switch performanceLevel {
+        switch currentPerformanceLevel {
         case .high:
             return 60.0
         case .medium:
@@ -226,11 +257,50 @@ class PerformanceOptimizationSystem: ObservableObject {
     }
     
     func shouldEnableAdvancedFeatures() -> Bool {
-        return performanceLevel == .high
+        return currentPerformanceLevel == .high
     }
     
     func getPerformanceLevel() -> PerformanceLevel {
-        return performanceLevel
+        return currentPerformanceLevel
+    }
+    
+    func recordFrame() {
+        frameRateCounter.recordFrame()
+    }
+    
+    func getBatteryOptimizationTips() -> [String] {
+        var tips: [String] = []
+        
+        if batteryLevel < 0.3 {
+            tips.append("Low battery detected. Consider using power saving mode.")
+        }
+        
+        if thermalState == .serious || thermalState == .critical {
+            tips.append("Device is getting hot. Reducing performance to prevent overheating.")
+        }
+        
+        if isLowPowerMode {
+            tips.append("Low Power Mode is enabled. Some features may be limited.")
+        }
+        
+        if memoryUsage > 0.8 {
+            tips.append("High memory usage detected. Consider closing other apps.")
+        }
+        
+        return tips
+    }
+    
+    func getPerformanceReport() -> PerformanceReport {
+        return PerformanceReport(
+            level: currentPerformanceLevel,
+            batteryLevel: batteryLevel,
+            thermalState: thermalState,
+            isLowPowerMode: isLowPowerMode,
+            frameRate: detectionFrameRate,
+            memoryUsage: Float(memoryUsage),
+            cpuUsage: cpuUsage,
+            timestamp: Date()
+        )
     }
 }
 
@@ -266,4 +336,115 @@ enum OverlayComplexity {
     case simple    // Basic shapes, no animations
     case medium    // Some animations, moderate detail
     case complex   // Full animations, high detail
+}
+
+// MARK: - Performance Monitoring Classes
+class FrameRateCounter {
+    private var frameTimes: [CFTimeInterval] = []
+    private let maxFrameCount = 30
+    private var lastFrameTime: CFTimeInterval = 0
+    
+    var currentFrameRate: Float {
+        guard frameTimes.count > 1 else { return 0 }
+        
+        let timeSpan = frameTimes.last! - frameTimes.first!
+        let frameCount = frameTimes.count - 1
+        
+        return Float(frameCount) / Float(timeSpan)
+    }
+    
+    func recordFrame() {
+        let currentTime = CACurrentMediaTime()
+        
+        if lastFrameTime > 0 {
+            let frameTime = currentTime - lastFrameTime
+            frameTimes.append(frameTime)
+            
+            if frameTimes.count > maxFrameCount {
+                frameTimes.removeFirst()
+            }
+        }
+        
+        lastFrameTime = currentTime
+    }
+}
+
+class MemoryMonitor {
+    var currentMemoryUsage: Float {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size)/4
+        
+        let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+                task_info(mach_task_self_,
+                         task_flavor_t(MACH_TASK_BASIC_INFO),
+                         $0,
+                         &count)
+            }
+        }
+        
+        if kerr == KERN_SUCCESS {
+            let usedMemory = Float(info.resident_size)
+            let totalMemory = Float(ProcessInfo.processInfo.physicalMemory)
+            return usedMemory / totalMemory
+        }
+        
+        return 0
+    }
+}
+
+class CPUMonitor {
+    private var lastCPUInfo: processor_info_array_t?
+    private var lastCPUInfoCount: mach_msg_type_number_t = 0
+    
+    var currentCPUUsage: Float {
+        var cpuInfo: processor_info_array_t!
+        var numCpuInfo: mach_msg_type_number_t = 0
+        var numCpus: natural_t = 0
+        
+        let result = host_processor_info(mach_host_self(),
+                                       PROCESSOR_CPU_LOAD_INFO,
+                                       &numCpus,
+                                       &cpuInfo,
+                                       &numCpuInfo)
+        
+        if result == KERN_SUCCESS {
+            var totalUsage: Float = 0
+            
+            for i in 0..<Int(numCpus) {
+                let cpuLoadInfo = cpuInfo.advanced(by: i * Int(CPU_STATE_MAX))
+                let cpuLoadInfoPtr = cpuLoadInfo.withMemoryRebound(to: processor_cpu_load_info.self, capacity: 1) { $0 }
+                
+                let user = Float(cpuLoadInfoPtr.pointee.cpu_ticks.0)
+                let system = Float(cpuLoadInfoPtr.pointee.cpu_ticks.1)
+                let idle = Float(cpuLoadInfoPtr.pointee.cpu_ticks.2)
+                let nice = Float(cpuLoadInfoPtr.pointee.cpu_ticks.3)
+                
+                let total = user + system + idle + nice
+                if total > 0 {
+                    let usage = (user + system + nice) / total
+                    totalUsage += usage
+                }
+            }
+            
+            return numCpus > 0 ? totalUsage / Float(numCpus) : 0
+        }
+        
+        return 0
+    }
+}
+
+struct PerformanceReport {
+    let level: PerformanceLevel
+    let batteryLevel: Float
+    let thermalState: ProcessInfo.ThermalState
+    let isLowPowerMode: Bool
+    let frameRate: Float
+    let memoryUsage: Float
+    let cpuUsage: Float
+    let timestamp: Date
+    
+    var summary: String {
+        return "Performance: \(level.description), Battery: \(Int(batteryLevel * 100))%, Frame Rate: \(Int(frameRate)) FPS"
+    }
 }
