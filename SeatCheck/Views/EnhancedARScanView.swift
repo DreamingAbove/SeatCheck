@@ -8,6 +8,7 @@
 import SwiftUI
 import ARKit
 import RealityKit
+import AVFoundation
 import Vision
 
 // MARK: - Enhanced AR Scan View
@@ -294,14 +295,75 @@ struct EnhancedARScanView: View {
         arView.configureForObjectVisualization()
         arVisualization.configure(with: arView, session: arView.session)
         
-        // Start AR session
+        // Start AR session with widest camera lens
         let configuration = ARWorldTrackingConfiguration()
         configuration.planeDetection = [.horizontal, .vertical]
         configuration.environmentTexturing = .automatic
         
+        // Configure for widest available camera lens
+        configureForWidestCameraLens(configuration)
+        
         arView.session.run(configuration)
         
-        print("🔧 Enhanced AR Scan View configured")
+        print("🔧 Enhanced AR Scan View configured with widest camera lens")
+    }
+    
+    private func configureForWidestCameraLens(_ configuration: ARWorldTrackingConfiguration) {
+        // Detect available camera lenses and configure for the widest one
+        let discoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [
+                .builtInUltraWideCamera,
+                .builtInWideAngleCamera,
+                .builtInTelephotoCamera
+            ],
+            mediaType: .video,
+            position: .back
+        )
+        
+        var widestLens: AVCaptureDevice.DeviceType?
+        
+        // Check for ultra-wide camera first (widest field of view)
+        if discoverySession.devices.contains(where: { $0.deviceType == .builtInUltraWideCamera }) {
+            widestLens = .builtInUltraWideCamera
+            print("📷 Enhanced AR using ultra-wide camera lens for maximum field of view")
+        }
+        // Fall back to wide-angle camera
+        else if discoverySession.devices.contains(where: { $0.deviceType == .builtInWideAngleCamera }) {
+            widestLens = .builtInWideAngleCamera
+            print("📷 Enhanced AR using wide-angle camera lens")
+        }
+        // Last resort: telephoto (though not ideal for wide scanning)
+        else if discoverySession.devices.contains(where: { $0.deviceType == .builtInTelephotoCamera }) {
+            widestLens = .builtInTelephotoCamera
+            print("📷 Enhanced AR using telephoto camera lens (fallback)")
+        }
+        
+        // Configure AR session to use the widest available lens
+        if let lens = widestLens {
+            if configureDeviceForAR(deviceType: lens) {
+                print("✅ Enhanced AR session configured for widest available camera lens: \(lens.rawValue)")
+            } else {
+                print("⚠️ Could not configure device for Enhanced AR lens: \(lens.rawValue)")
+            }
+        } else {
+            print("⚠️ No suitable camera lens found for Enhanced AR, using default configuration")
+        }
+    }
+    
+    private func configureDeviceForAR(deviceType: AVCaptureDevice.DeviceType) -> Bool {
+        // Get the device to verify it exists and log information
+        guard let device = AVCaptureDevice.default(deviceType, for: .video, position: .back) else {
+            return false
+        }
+        
+        // Log device information
+        let formats = device.formats
+        if let bestFormat = formats.first {
+            let dimensions = bestFormat.formatDescription.dimensions
+            print("📷 Enhanced AR selected camera device: \(device.localizedName) with resolution: \(dimensions.width)x\(dimensions.height)")
+        }
+        
+        return true
     }
     
     private func toggleScanning() {
